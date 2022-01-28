@@ -1,11 +1,19 @@
 from matplotlib import pyplot as plt
 import numpy as np
 import tensorflow as tf
+from mpl_toolkits.mplot3d import Axes3D
 
+plt.rcParams["font.size"] = 18
 
-mnist = tf.keras.datasets.mnist
-
-(x_train, y_train), (x_test, y_test) = mnist.load_data()
-x_train = x_train/255.0
-x_test = x_test/255.0
-
+z = np.linspace(0, 3*np.pi, 100)
+E = np.exp(-1.0j * z)
+fig = plt.figure()
+ax = Axes3D(fig)
+ax.plot(E.imag, z, E.real, color="red")
+ax.set_xlabel("image")
+ax.set_zlabel("real")
+ax.grid(False)
+ax.set_xticks([])
+ax.set_yticks([])
+ax.set_zticks([])
+plt.show()
