@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow_core.python.keras.layers import Lambda
+from tensorflow.keras.layers import Lambda
 import numpy as np
 import matplotlib.pyplot as plt
 
