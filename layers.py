@@ -27,6 +27,7 @@ class InputToCx(tf.keras.layers.Layer):
 
         return tf.stack([rcp, lcp], axis=1)
 
+
 class CxMO(tf.keras.layers.Layer):
     def __init__(self, output_dim):
         super(CxMO, self).__init__()
@@ -51,22 +52,23 @@ class CxMO(tf.keras.layers.Layer):
         mo_real = tf.cos(self.phi)
         mo_imag = tf.sin(self.phi)
 
-        rcp_x_real = x_rcp[:,0,:,:] * mo_real - x_rcp[:,1,:,:] * mo_imag
-        rcp_x_imag = x_rcp[:,0,:,:] * mo_imag + x_rcp[:,1,:,:] * mo_real
+        rcp_x_real = x_rcp[:, 0, :, :] * mo_real - x_rcp[:, 1, :, :] * mo_imag
+        rcp_x_imag = x_rcp[:, 0, :, :] * mo_imag + x_rcp[:, 1, :, :] * mo_real
 
-        rcp_y_real = y_rcp[:,0,:,:] * mo_real - y_rcp[:,1,:,:] * mo_imag
-        rcp_y_imag = y_rcp[:,0,:,:] * mo_imag + y_rcp[:,1,:,:] * mo_real
+        rcp_y_real = y_rcp[:, 0, :, :] * mo_real - y_rcp[:, 1, :, :] * mo_imag
+        rcp_y_imag = y_rcp[:, 0, :, :] * mo_imag + y_rcp[:, 1, :, :] * mo_real
 
-        lcp_x_real = x_lcp[:,0,:,:] * mo_real - x_lcp[:,1,:,:] * -mo_imag
-        lcp_x_imag = x_lcp[:,0,:,:] * -mo_imag + x_lcp[:,1,:,:] * mo_real
+        lcp_x_real = x_lcp[:, 0, :, :] * mo_real - x_lcp[:, 1, :, :] * -mo_imag
+        lcp_x_imag = x_lcp[:, 0, :, :] * -mo_imag + x_lcp[:, 1, :, :] * mo_real
 
-        lcp_y_real = y_lcp[:,0,:,:] * mo_real - y_lcp[:,1,:,:] * -mo_imag
-        lcp_y_imag = y_lcp[:,0,:,:] * -mo_imag + y_lcp[:,1,:,:] * mo_real
+        lcp_y_real = y_lcp[:, 0, :, :] * mo_real - y_lcp[:, 1, :, :] * -mo_imag
+        lcp_y_imag = y_lcp[:, 0, :, :] * -mo_imag + y_lcp[:, 1, :, :] * mo_real
 
         rcp = tf.stack([rcp_x_real, rcp_x_imag, rcp_y_real, rcp_y_imag], axis=1)
         lcp = tf.stack([lcp_x_real, lcp_x_imag, lcp_y_real, lcp_y_imag], axis=1)
 
         return tf.stack([rcp, lcp], axis=1)
+
 
 class FreeSpacePropagation(tf.keras.layers.Layer):
     def __init__(self, output_dim, k, z, input_pitch=1e-6, output_pitch=1e-6, normalization=None):
@@ -103,36 +105,35 @@ class FreeSpacePropagation(tf.keras.layers.Layer):
         super(FreeSpacePropagation, self).build(input_shape)
 
     def call(self, x, **kwargs):
-        x_rcp = Lambda(lambda x:x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        y_rcp = Lambda(lambda x:x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
-        x_lcp = Lambda(lambda x:x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        y_lcp = Lambda(lambda x:x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
+        x_rcp = Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
+        y_rcp = Lambda(lambda x: x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
+        x_lcp = Lambda(lambda x: x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
+        y_lcp = Lambda(lambda x: x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
 
         x_rcp = tf.reshape(x_rcp, (-1, 2, x.shape[-1] * x.shape[-2]))
         y_rcp = tf.reshape(y_rcp, (-1, 2, x.shape[-1] * x.shape[-2]))
         x_lcp = tf.reshape(x_lcp, (-1, 2, x.shape[-1] * x.shape[-2]))
         y_lcp = tf.reshape(y_lcp, (-1, 2, x.shape[-1] * x.shape[-2]))
 
-        rcp_x_real = tf.matmul(x_rcp[:,0,:], self.w_real) - tf.matmul(x_rcp[:,1,:], self.w_imag)
-        rcp_x_imag = tf.matmul(x_rcp[:,0,:], self.w_imag) + tf.matmul(x_rcp[:,1,:], self.w_real)
+        rcp_x_real = tf.matmul(x_rcp[:, 0, :], self.w_real) - tf.matmul(x_rcp[:, 1, :], self.w_imag)
+        rcp_x_imag = tf.matmul(x_rcp[:, 0, :], self.w_imag) + tf.matmul(x_rcp[:, 1, :], self.w_real)
         rcp_x_real = tf.reshape(rcp_x_real, (-1, self.output_dim[0], self.output_dim[1]))
         rcp_x_imag = tf.reshape(rcp_x_imag, (-1, self.output_dim[0], self.output_dim[1]))
 
-        rcp_y_real = tf.matmul(y_rcp[:,0,:], self.w_real) - tf.matmul(y_rcp[:,1,:], self.w_imag)
-        rcp_y_imag = tf.matmul(y_rcp[:,0,:], self.w_imag) + tf.matmul(y_rcp[:,1,:], self.w_real)
+        rcp_y_real = tf.matmul(y_rcp[:, 0, :], self.w_real) - tf.matmul(y_rcp[:, 1, :], self.w_imag)
+        rcp_y_imag = tf.matmul(y_rcp[:, 0, :], self.w_imag) + tf.matmul(y_rcp[:, 1, :], self.w_real)
         rcp_y_real = tf.reshape(rcp_y_real, (-1, self.output_dim[0], self.output_dim[1]))
         rcp_y_imag = tf.reshape(rcp_y_imag, (-1, self.output_dim[0], self.output_dim[1]))
 
-        lcp_x_real = tf.matmul(x_lcp[:,0,:], self.w_real) - tf.matmul(x_lcp[:,1,:], self.w_imag)
-        lcp_x_imag = tf.matmul(x_lcp[:,0,:], self.w_imag) + tf.matmul(x_lcp[:,1,:], self.w_real)
+        lcp_x_real = tf.matmul(x_lcp[:, 0, :], self.w_real) - tf.matmul(x_lcp[:, 1, :], self.w_imag)
+        lcp_x_imag = tf.matmul(x_lcp[:, 0, :], self.w_imag) + tf.matmul(x_lcp[:, 1, :], self.w_real)
         lcp_x_real = tf.reshape(lcp_x_real, (-1, self.output_dim[0], self.output_dim[1]))
         lcp_x_imag = tf.reshape(lcp_x_imag, (-1, self.output_dim[0], self.output_dim[1]))
 
-        lcp_y_real = tf.matmul(y_lcp[:,0,:], self.w_real) - tf.matmul(y_lcp[:,1,:], self.w_imag)
-        lcp_y_imag = tf.matmul(y_lcp[:,0,:], self.w_imag) + tf.matmul(y_lcp[:,1,:], self.w_real)
+        lcp_y_real = tf.matmul(y_lcp[:, 0, :], self.w_real) - tf.matmul(y_lcp[:, 1, :], self.w_imag)
+        lcp_y_imag = tf.matmul(y_lcp[:, 0, :], self.w_imag) + tf.matmul(y_lcp[:, 1, :], self.w_real)
         lcp_y_real = tf.reshape(lcp_y_real, (-1, self.output_dim[0], self.output_dim[1]))
         lcp_y_imag = tf.reshape(lcp_y_imag, (-1, self.output_dim[0], self.output_dim[1]))
-
 
         rcp = tf.stack([rcp_x_real, rcp_x_imag, rcp_y_real, rcp_y_imag], axis=1)
         lcp = tf.stack([lcp_x_real, lcp_x_imag, lcp_y_real, lcp_y_imag], axis=1)
@@ -153,15 +154,15 @@ class CxD2NNIntensity(tf.keras.layers.Layer):
         self.normalization = normalization
 
     def call(self, x, **kwargs):
-        x_rcp = Lambda(lambda x:x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        y_rcp = Lambda(lambda x:x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
-        x_lcp = Lambda(lambda x:x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        y_lcp = Lambda(lambda x:x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
+        x_rcp = Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
+        y_rcp = Lambda(lambda x: x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
+        x_lcp = Lambda(lambda x: x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
+        y_lcp = Lambda(lambda x: x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
 
         tot_x = x_rcp + x_lcp
         tot_y = y_rcp + y_lcp
 
-        intensity = tot_x[:,0,:,:]**2 + tot_x[:,1,:,:]**2 + tot_y[:,0,:,:]**2 + tot_y[:,1,:,:]**2
+        intensity = tot_x[:, 0, :, :] ** 2 + tot_x[:, 1, :, :] ** 2 + tot_y[:, 0, :, :] ** 2 + tot_y[:, 1, :, :] ** 2
         if self.normalization == 'min_max':
             max = tf.reduce_max(intensity)
             min = tf.reduce_min(intensity)
