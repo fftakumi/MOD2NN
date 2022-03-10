@@ -252,5 +252,16 @@ class CxD2NNMNISTDetector(tf.keras.layers.Layer):
         return y
 
 
+class ImageResize(tf.keras.layers.Layer):
+    def __init__(self, output_dim):
+        super(ImageResize, self).__init__()
+        self.output_dim = output_dim
+
+    def call(self, x):
+        x_expnad = tf.image.resize(tf.expand_dims(x, -1), self.output_dim)
+        x_expnad = Lambda(lambda x: x[:, :, :, 0])(x_expnad)
+        return x_expnad
+
+
 if __name__ == '__main__':
     pass
