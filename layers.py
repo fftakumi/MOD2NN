@@ -1,5 +1,4 @@
 import tensorflow as tf
-from tensorflow.keras.layers import Lambda
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -105,10 +104,10 @@ class FreeSpacePropagation(tf.keras.layers.Layer):
         super(FreeSpacePropagation, self).build(input_shape)
 
     def call(self, x, **kwargs):
-        x_rcp = tf.keras.Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        y_rcp = Lambda(lambda x: x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
-        x_lcp = Lambda(lambda x: x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        y_lcp = Lambda(lambda x: x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
+        x_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
+        y_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
+        x_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
+        y_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
 
         x_rcp = tf.reshape(x_rcp, (-1, 2, x.shape[-1] * x.shape[-2]))
         y_rcp = tf.reshape(y_rcp, (-1, 2, x.shape[-1] * x.shape[-2]))
@@ -154,10 +153,10 @@ class CxD2NNIntensity(tf.keras.layers.Layer):
         self.normalization = normalization
 
     def call(self, x, **kwargs):
-        x_rcp = Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        y_rcp = Lambda(lambda x: x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
-        x_lcp = Lambda(lambda x: x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        y_lcp = Lambda(lambda x: x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
+        x_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
+        y_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
+        x_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
+        y_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
 
         tot_x = x_rcp + x_lcp
         tot_y = y_rcp + y_lcp
@@ -259,7 +258,7 @@ class ImageResize(tf.keras.layers.Layer):
 
     def call(self, x):
         x_expnad = tf.image.resize(tf.expand_dims(x, -1), self.output_dim)
-        x_expnad = Lambda(lambda x: x[:, :, :, 0])(x_expnad)
+        x_expnad = tf.keras.layers.Lambda(lambda x: x[:, :, :, 0])(x_expnad)
         return x_expnad
 
 
