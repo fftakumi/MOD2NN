@@ -285,7 +285,6 @@ class CxD2NNStokes(tf.keras.layers.Layer):
         I135 = E135_x[0, :, :] ** 2 + E135_x[1, :, :] ** 2 + E135_y[0, :, :] ** 2 + E135_y[1, :, :] ** 2
         E_tot_x = rcp_x + lcp_x
         E_tot_y = rcp_y + lcp_y
-        E_tot = E_tot_x[0, :, :] ** 2 + E_tot_x[1, :, :] ** 2 + E_tot_y[0, :, :] ** 2 + E_tot_y[1, :, :] ** 2
 
         S0 = (I0 + I90 + I45 + I135) / 2
         S1 = I0 - I90
