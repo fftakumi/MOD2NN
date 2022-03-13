@@ -105,7 +105,7 @@ class FreeSpacePropagation(tf.keras.layers.Layer):
         super(FreeSpacePropagation, self).build(input_shape)
 
     def call(self, x, **kwargs):
-        x_rcp = Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
+        x_rcp = tf.keras.Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
         y_rcp = Lambda(lambda x: x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
         x_lcp = Lambda(lambda x: x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
         y_lcp = Lambda(lambda x: x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
@@ -261,6 +261,38 @@ class ImageResize(tf.keras.layers.Layer):
         x_expnad = tf.image.resize(tf.expand_dims(x, -1), self.output_dim)
         x_expnad = Lambda(lambda x: x[:, :, :, 0])(x_expnad)
         return x_expnad
+
+
+class CxD2NNStokes(tf.keras.layers.Layer):
+    def __init__(self, output_dim):
+        super(InputToCx, self).__init__()
+        self.output_dim = output_dim
+
+    def call(self, x, **kwargs):
+        rcp_x = x[0, 0, 0:2, :, :]
+        rcp_y = x[0, 0, 2:4, :, :]
+        lcp_x = x[0, 1, 0:2, :, :]
+        lcp_y = x[0, 1, 2:4, :, :]
+
+        E0 = rcp_x + lcp_x
+        I0 = E0[0, :, :] ** 2 + E0[1, :, :] ** 2
+        E90 = rcp_y + lcp_y
+        I90 = E90[0, :, :] ** 2 + E90[1, :, :] ** 2
+        E45_x = (rcp_x + rcp_y + lcp_x + lcp_y) / 2
+        E45_y = (rcp_x + rcp_y + lcp_x + lcp_y) / 2
+        I45 = E45_x[0, :, :] ** 2 + E45_x[1, :, :] ** 2 + E45_y[0, :, :] ** 2 + E45_y[1, :, :] ** 2
+        E135_x = (rcp_x - rcp_y + lcp_x - lcp_y) / 2
+        E135_y = (-rcp_x + rcp_y - lcp_x + lcp_y) / 2
+        I135 = E135_x[0, :, :] ** 2 + E135_x[1, :, :] ** 2 + E135_y[0, :, :] ** 2 + E135_y[1, :, :] ** 2
+        E_tot_x = rcp_x + lcp_x
+        E_tot_y = rcp_y + lcp_y
+        E_tot = E_tot_x[0, :, :] ** 2 + E_tot_x[1, :, :] ** 2 + E_tot_y[0, :, :] ** 2 + E_tot_y[1, :, :] ** 2
+
+        S0 = (I0 + I90 + I45 + I135) / 2
+        S1 = I0 - I90
+        S2 = I45 - I135
+
+        return tf.stack([S0, S1, S2], axis=1)
 
 
 if __name__ == '__main__':
