@@ -34,8 +34,8 @@ class CxMO(tf.keras.layers.Layer):
 
     def build(self, input_dim):
         self.phi = self.add_weight("phi",
-                                     shape=[int(input_dim[-2]),
-                                            int(input_dim[-1])])
+                                   shape=[int(input_dim[-2]),
+                                          int(input_dim[-1])])
 
         super(CxMO, self).build(input_dim)
 
@@ -188,6 +188,8 @@ class CxD2NNMNISTDetector(tf.keras.layers.Layer):
     def plot_area(self, input_shape, same_color=False):
         width = min(int(np.floor(input_shape[1] / 9.0)), int(np.floor(input_shape[0] / 7.0)))
         height = min(int(np.floor(input_shape[1] / 9.0)), int(np.floor(input_shape[0] / 7.0)))
+        width = self.width
+        height = self.height
         x = np.zeros(input_shape)
         if same_color:
             x[2 * height:3 * height, width:2 * width] = 1
@@ -214,16 +216,16 @@ class CxD2NNMNISTDetector(tf.keras.layers.Layer):
         plt.imshow(x)
 
     def call(self, x, **kwargs):
-        y0 = x[:, 2 * self.height:3 * self.height, self.width:2 * self.width]
-        y1 = x[:, 2 * self.height:3 * self.height, 4 * self.width:5 * self.width]
-        y2 = x[:, 2 * self.height:3 * self.height, 7 * self.width:8 * self.width]
-        y3 = x[:, 4 * self.height:5 * self.height, self.width:2 * self.width]
-        y4 = x[:, 4 * self.height:5 * self.height, 3 * self.width:4 * self.width]
-        y5 = x[:, 4 * self.height:5 * self.height, 5 * self.width:6 * self.width]
-        y6 = x[:, 4 * self.height:5 * self.height, 7 * self.width:8 * self.width]
-        y7 = x[:, 6 * self.height:7 * self.height, self.width:2 * self.width]
-        y8 = x[:, 6 * self.height:7 * self.height, 4 * self.width:5 * self.width]
-        y9 = x[:, 6 * self.height:7 * self.height, 7 * self.width:8 * self.width]
+        y0 = tf.keras.layers.Lambda(lambda x: x[:, 2 * self.height:3 * self.height, self.width:2 * self.width])(x)
+        y1 = tf.keras.layers.Lambda(lambda x: x[:, 2 * self.height:3 * self.height, 4 * self.width:5 * self.width])(x)
+        y2 = tf.keras.layers.Lambda(lambda x: x[:, 2 * self.height:3 * self.height, 7 * self.width:8 * self.width])(x)
+        y3 = tf.keras.layers.Lambda(lambda x: x[:, 4 * self.height:5 * self.height, self.width:2 * self.width])(x)
+        y4 = tf.keras.layers.Lambda(lambda x: x[:, 4 * self.height:5 * self.height, 3 * self.width:4 * self.width])(x)
+        y5 = tf.keras.layers.Lambda(lambda x: x[:, 4 * self.height:5 * self.height, 5 * self.width:6 * self.width])(x)
+        y6 = tf.keras.layers.Lambda(lambda x: x[:, 4 * self.height:5 * self.height, 7 * self.width:8 * self.width])(x)
+        y7 = tf.keras.layers.Lambda(lambda x: x[:, 6 * self.height:7 * self.height, self.width:2 * self.width])(x)
+        y8 = tf.keras.layers.Lambda(lambda x: x[:, 6 * self.height:7 * self.height, 4 * self.width:5 * self.width])(x)
+        y9 = tf.keras.layers.Lambda(lambda x: x[:, 6 * self.height:7 * self.height, 7 * self.width:8 * self.width])(x)
         y0 = tf.reduce_sum(y0, axis=[1])
         y0 = tf.reduce_sum(y0, axis=[1], keepdims=True)
         y1 = tf.reduce_sum(y1, axis=[1])
