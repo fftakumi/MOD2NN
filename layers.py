@@ -33,7 +33,7 @@ class CxMO(tf.keras.layers.Layer):
         self.output_dim = output_dim
 
     def build(self, input_dim):
-        self.phi = self.add_variable("phi",
+        self.phi = self.add_weight("phi",
                                      shape=[int(input_dim[-2]),
                                             int(input_dim[-1])])
 
