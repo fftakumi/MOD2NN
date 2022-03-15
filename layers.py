@@ -188,8 +188,6 @@ class CxD2NNMNISTDetector(tf.keras.layers.Layer):
     def plot_area(self, input_shape, same_color=False):
         width = min(int(np.floor(input_shape[1] / 9.0)), int(np.floor(input_shape[0] / 7.0)))
         height = min(int(np.floor(input_shape[1] / 9.0)), int(np.floor(input_shape[0] / 7.0)))
-        width = self.width
-        height = self.height
         x = np.zeros(input_shape)
         if same_color:
             x[2 * height:3 * height, width:2 * width] = 1
@@ -246,7 +244,78 @@ class CxD2NNMNISTDetector(tf.keras.layers.Layer):
         y8 = tf.reduce_sum(y8, axis=[1], keepdims=True)
         y9 = tf.reduce_sum(y9, axis=[1])
         y9 = tf.reduce_sum(y9, axis=[1], keepdims=True)
+
         y = tf.keras.layers.concatenate([y0, y1, y2, y3, y4, y5, y6, y7, y8, y9])
+
+        if self.activation == 'softmax':
+            y = tf.nn.softmax(y)
+        return y
+
+
+class Detector(tf.keras.layers.Layer):
+    def __init__(self, output_dim, activation=None, **kwargs):
+        super(Detector, self).__init__(**kwargs)
+        self.output_dim = output_dim
+        self.activation = activation
+
+    def build(self, input_shape):
+        self.input_dim = input_shape
+        width = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
+        height = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
+
+        w0 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
+        w0[2 * height:3 * height, width:2 * width] = 1.0
+        self.w0 = tf.constant(w0)
+
+        w1 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
+        w1[2 * height:3 * height, 4 * width:5 * width] = 1.0
+        self.w1 = tf.constant(w1)
+
+        w2 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
+        w2[2 * height:3 * height, 7 * width:8 * width] = 1.0
+        self.w2 = tf.constant(w2)
+
+        w3 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
+        w3[4 * height:5 * height, 1 * width:2 * width] = 1.0
+        self.w3 = tf.constant(w3)
+
+        w4 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
+        w4[4 * height:5 * height, 3 * width:4 * width] = 1.0
+        self.w4 = tf.constant(w4)
+
+        w5 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
+        w5[4 * height:5 * height, 5 * width:6 * width] = 1.0
+        self.w5 = tf.constant(w5)
+
+        w6 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
+        w6[4 * height:5 * height, 7 * width:8 * width] = 1.0
+        self.w6 = tf.constant(w6)
+
+        w7 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
+        w7[6 * height:7 * height, width:2 * width] = 1.0
+        self.w7 = tf.constant(w7)
+
+        w8 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
+        w8[6 * height:7 * height, 4 * width:5 * width] = 1.0
+        self.w8 = tf.constant(w8)
+
+        w9 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
+        w9[6 * height:7 * height, 7 * width:8 * width] = 1.0
+        self.w9 = tf.constant(w9)
+
+    def call(self, x, **kwargs):
+        y0 = tf.tensordot(x, self.w0, axes=[[1, 2], [0, 1]])
+        y1 = tf.tensordot(x, self.w1, axes=[[1, 2], [0, 1]])
+        y2 = tf.tensordot(x, self.w2, axes=[[1, 2], [0, 1]])
+        y3 = tf.tensordot(x, self.w3, axes=[[1, 2], [0, 1]])
+        y4 = tf.tensordot(x, self.w4, axes=[[1, 2], [0, 1]])
+        y5 = tf.tensordot(x, self.w5, axes=[[1, 2], [0, 1]])
+        y6 = tf.tensordot(x, self.w6, axes=[[1, 2], [0, 1]])
+        y7 = tf.tensordot(x, self.w7, axes=[[1, 2], [0, 1]])
+        y8 = tf.tensordot(x, self.w8, axes=[[1, 2], [0, 1]])
+        y9 = tf.tensordot(x, self.w9, axes=[[1, 2], [0, 1]])
+
+        y = tf.keras.layers.concatenate([y0, y1, y2, y3, y4, y5, y6, y7, y8, y9], axis=-1)
 
         if self.activation == 'softmax':
             y = tf.nn.softmax(y)
