@@ -173,88 +173,9 @@ class CxD2NNIntensity(tf.keras.layers.Layer):
         return intensity
 
 
-class CxD2NNMNISTDetector(tf.keras.layers.Layer):
+class D2NNMNISTDetector(tf.keras.layers.Layer):
     def __init__(self, output_dim, activation=None, **kwargs):
-        super(CxD2NNMNISTDetector, self).__init__(**kwargs)
-        self.output_dim = output_dim
-        self.activation = activation
-
-    def build(self, input_shape):
-        self.input_dim = input_shape
-        self.width = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
-        self.height = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
-        super(CxD2NNMNISTDetector, self).build(input_shape)
-
-    def plot_area(self, input_shape, same_color=False):
-        width = min(int(np.floor(input_shape[1] / 9.0)), int(np.floor(input_shape[0] / 7.0)))
-        height = min(int(np.floor(input_shape[1] / 9.0)), int(np.floor(input_shape[0] / 7.0)))
-        x = np.zeros(input_shape)
-        if same_color:
-            x[2 * height:3 * height, width:2 * width] = 1
-            x[2 * height:3 * height, 4 * width:5 * width] = 1
-            x[2 * height:3 * height, 7 * width:8 * width] = 1
-            x[4 * height:5 * height, 1 * width:2 * width] = 1
-            x[4 * height:5 * height, 3 * width:4 * width] = 1
-            x[4 * height:5 * height, 5 * width:6 * width] = 1
-            x[4 * height:5 * height, 7 * width:8 * width] = 1
-            x[6 * height:7 * height, width:2 * width] = 1
-            x[6 * height:7 * height, 4 * width:5 * width] = 1
-            x[6 * height:7 * height, 7 * width:8 * width] = 1
-        else:
-            x[2 * height:3 * height, width:2 * width] = 1
-            x[2 * height:3 * height, 4 * width:5 * width] = 2
-            x[2 * height:3 * height, 7 * width:8 * width] = 3
-            x[4 * height:5 * height, 1 * width:2 * width] = 4
-            x[4 * height:5 * height, 3 * width:4 * width] = 5
-            x[4 * height:5 * height, 5 * width:6 * width] = 6
-            x[4 * height:5 * height, 7 * width:8 * width] = 7
-            x[6 * height:7 * height, width:2 * width] = 8
-            x[6 * height:7 * height, 4 * width:5 * width] = 9
-            x[6 * height:7 * height, 7 * width:8 * width] = 10
-        plt.imshow(x)
-
-    def call(self, x, **kwargs):
-        y0 = tf.keras.layers.Lambda(lambda x: x[:, 2 * self.height:3 * self.height, self.width:2 * self.width])(x)
-        y1 = tf.keras.layers.Lambda(lambda x: x[:, 2 * self.height:3 * self.height, 4 * self.width:5 * self.width])(x)
-        y2 = tf.keras.layers.Lambda(lambda x: x[:, 2 * self.height:3 * self.height, 7 * self.width:8 * self.width])(x)
-        y3 = tf.keras.layers.Lambda(lambda x: x[:, 4 * self.height:5 * self.height, self.width:2 * self.width])(x)
-        y4 = tf.keras.layers.Lambda(lambda x: x[:, 4 * self.height:5 * self.height, 3 * self.width:4 * self.width])(x)
-        y5 = tf.keras.layers.Lambda(lambda x: x[:, 4 * self.height:5 * self.height, 5 * self.width:6 * self.width])(x)
-        y6 = tf.keras.layers.Lambda(lambda x: x[:, 4 * self.height:5 * self.height, 7 * self.width:8 * self.width])(x)
-        y7 = tf.keras.layers.Lambda(lambda x: x[:, 6 * self.height:7 * self.height, self.width:2 * self.width])(x)
-        y8 = tf.keras.layers.Lambda(lambda x: x[:, 6 * self.height:7 * self.height, 4 * self.width:5 * self.width])(x)
-        y9 = tf.keras.layers.Lambda(lambda x: x[:, 6 * self.height:7 * self.height, 7 * self.width:8 * self.width])(x)
-        y0 = tf.reduce_sum(y0, axis=[1])
-        y0 = tf.reduce_sum(y0, axis=[1], keepdims=True)
-        y1 = tf.reduce_sum(y1, axis=[1])
-        y1 = tf.reduce_sum(y1, axis=[1], keepdims=True)
-        y2 = tf.reduce_sum(y2, axis=[1])
-        y2 = tf.reduce_sum(y2, axis=[1], keepdims=True)
-        y3 = tf.reduce_sum(y3, axis=[1])
-        y3 = tf.reduce_sum(y3, axis=[1], keepdims=True)
-        y4 = tf.reduce_sum(y4, axis=[1])
-        y4 = tf.reduce_sum(y4, axis=[1], keepdims=True)
-        y5 = tf.reduce_sum(y5, axis=[1])
-        y5 = tf.reduce_sum(y5, axis=[1], keepdims=True)
-        y6 = tf.reduce_sum(y6, axis=[1])
-        y6 = tf.reduce_sum(y6, axis=[1], keepdims=True)
-        y7 = tf.reduce_sum(y7, axis=[1])
-        y7 = tf.reduce_sum(y7, axis=[1], keepdims=True)
-        y8 = tf.reduce_sum(y8, axis=[1])
-        y8 = tf.reduce_sum(y8, axis=[1], keepdims=True)
-        y9 = tf.reduce_sum(y9, axis=[1])
-        y9 = tf.reduce_sum(y9, axis=[1], keepdims=True)
-
-        y = tf.keras.layers.concatenate([y0, y1, y2, y3, y4, y5, y6, y7, y8, y9])
-
-        if self.activation == 'softmax':
-            y = tf.nn.softmax(y)
-        return y
-
-
-class Detector(tf.keras.layers.Layer):
-    def __init__(self, output_dim, activation=None, **kwargs):
-        super(Detector, self).__init__(**kwargs)
+        super(D2NNMNISTDetector, self).__init__(**kwargs)
         self.output_dim = output_dim
         self.activation = activation
 
@@ -311,6 +232,36 @@ class Detector(tf.keras.layers.Layer):
         if self.activation == 'softmax':
             y = tf.nn.softmax(y)
         return y
+
+
+class D2NNMNISTFilter(tf.keras.layers.Layer):
+    def __init__(self, output_dim, activation=None, **kwargs):
+        super(D2NNMNISTFilter, self).__init__(**kwargs)
+        self.output_dim = output_dim
+        self.activation = activation
+
+    def build(self, input_shape):
+        self.input_dim = input_shape
+        width = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
+        height = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
+
+        filter = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
+        filter[2 * height:3 * height, width:2 * width] = 1.0
+        filter[2 * height:3 * height, 4 * width:5 * width] = 1.0
+        filter[2 * height:3 * height, 7 * width:8 * width] = 1.0
+        filter[4 * height:5 * height, 1 * width:2 * width] = 1.0
+        filter[4 * height:5 * height, 3 * width:4 * width] = 1.0
+        filter[4 * height:5 * height, 5 * width:6 * width] = 1.0
+        filter[4 * height:5 * height, 7 * width:8 * width] = 1.0
+        filter[6 * height:7 * height, width:2 * width] = 1.0
+        filter[6 * height:7 * height, 4 * width:5 * width] = 1.0
+        filter[6 * height:7 * height, 7 * width:8 * width] = 1.0
+
+        self.filter = tf.constant(filter)
+
+    def call(self, x, **kwargs):
+        return tf.multiply(x, self.filter)
+
 
 
 class ImageResize(tf.keras.layers.Layer):
