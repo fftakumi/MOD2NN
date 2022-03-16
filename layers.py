@@ -53,6 +53,9 @@ class CxMO(tf.keras.layers.Layer):
         if self.limitation == 'sigmoid':
             mo_real = tf.cos(self.limitation_num * tf.math.sigmoid(self.phi))
             mo_imag = tf.sin(self.limitation_num * tf.math.sigmoid(self.phi))
+        elif self.limitation == 'tanh':
+            mo_real = tf.cos(self.limitation_num * tf.math.tanh(self.phi))
+            mo_imag = tf.sin(self.limitation_num * tf.math.tanh(self.phi))
         else:
             mo_real = tf.cos(self.phi)
             mo_imag = tf.sin(self.phi)
