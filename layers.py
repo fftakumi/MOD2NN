@@ -28,9 +28,11 @@ class InputToCx(tf.keras.layers.Layer):
 
 
 class CxMO(tf.keras.layers.Layer):
-    def __init__(self, output_dim):
+    def __init__(self, output_dim, limitation=None, limitation_num=1):
         super(CxMO, self).__init__()
         self.output_dim = output_dim
+        self.limitation = limitation
+        self.limitation_num = limitation_num
 
     def build(self, input_dim):
         self.phi = self.add_weight("phi",
@@ -48,8 +50,12 @@ class CxMO(tf.keras.layers.Layer):
         # x_rcp[0,:,:] : real
         # x_rcp[1,:,:] : imag
 
-        mo_real = tf.cos(self.phi)
-        mo_imag = tf.sin(self.phi)
+        if self.limitation == 'sigmoid':
+            mo_real = tf.cos(self.limitation_num * tf.math.sigmoid(self.phi))
+            mo_imag = tf.sin(self.limitation_num * tf.math.sigmoid(self.phi))
+        else:
+            mo_real = tf.cos(self.phi)
+            mo_imag = tf.sin(self.phi)
 
         rcp_x_real = x_rcp[:, 0, :, :] * mo_real - x_rcp[:, 1, :, :] * mo_imag
         rcp_x_imag = x_rcp[:, 0, :, :] * mo_imag + x_rcp[:, 1, :, :] * mo_real
