@@ -265,45 +265,45 @@ class Detector(tf.keras.layers.Layer):
 
         w0 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
         w0[2 * height:3 * height, width:2 * width] = 1.0
-        w0 = tf.constant(w0.reshape(-1))
+        w0 = tf.constant(w0)
 
         w1 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
         w1[2 * height:3 * height, 4 * width:5 * width] = 1.0
-        w1 = tf.constant(w1.reshape(-1))
+        w1 = tf.constant(w1)
 
         w2 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
         w2[2 * height:3 * height, 7 * width:8 * width] = 1.0
-        w2 = tf.constant(w2.reshape(-1))
+        w2 = tf.constant(w2)
 
         w3 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
         w3[4 * height:5 * height, 1 * width:2 * width] = 1.0
-        w3 = tf.constant(w3.reshape(-1))
+        w3 = tf.constant(w3)
 
         w4 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
         w4[4 * height:5 * height, 3 * width:4 * width] = 1.0
-        w4 = tf.constant(w4.reshape(-1))
+        w4 = tf.constant(w4)
 
         w5 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
         w5[4 * height:5 * height, 5 * width:6 * width] = 1.0
-        w5 = tf.constant(w5.reshape(-1))
+        w5 = tf.constant(w5)
 
         w6 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
         w6[4 * height:5 * height, 7 * width:8 * width] = 1.0
-        w6 = tf.constant(w6.reshape(-1))
+        w6 = tf.constant(w6)
 
         w7 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
         w7[6 * height:7 * height, width:2 * width] = 1.0
-        w7 = tf.constant(w7.reshape(-1))
+        w7 = tf.constant(w7)
 
         w8 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
         w8[6 * height:7 * height, 4 * width:5 * width] = 1.0
-        w8 = tf.constant(w8.reshape(-1))
+        w8 = tf.constant(w8)
 
         w9 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
         w9[6 * height:7 * height, 7 * width:8 * width] = 1.0
-        w9 = tf.constant(w9.reshape(-1))
+        w9 = tf.constant(w9)
 
-        self.filter = tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=1)
+        self.filter = tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
 
     def call(self, x, **kwargs):
         # y0 = tf.reduce_sum(x * self.w0)
@@ -318,8 +318,7 @@ class Detector(tf.keras.layers.Layer):
         # y8 = tf.tensordot(x, self.w8, axes=[[1, 2], [0, 1]])
         # y9 = tf.tensordot(x, self.w9, axes=[[1, 2], [0, 1]])
 
-        x = tf.reshape(x, (-1, self.input_dim[-2] * self.input_dim[-1]))
-        y = tf.tensordot(x, self.filter, axes=[1, 0])
+        y = tf.tensordot(x, self.filter, axes=[[1, 2], [0, 1]])
 
         if self.activation == 'softmax':
             y = tf.nn.softmax(y)
