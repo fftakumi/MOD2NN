@@ -306,18 +306,6 @@ class Detector(tf.keras.layers.Layer):
         self.filter = tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
 
     def call(self, x, **kwargs):
-        # y0 = tf.reduce_sum(x * self.w0)
-        # y0 = tf.tensordot(x, self.w0, axes=[[1, 2], [0, 1]])
-        # y1 = tf.tensordot(x, self.w1, axes=[[1, 2], [0, 1]])
-        # y2 = tf.tensordot(x, self.w2, axes=[[1, 2], [0, 1]])
-        # y3 = tf.tensordot(x, self.w3, axes=[[1, 2], [0, 1]])
-        # y4 = tf.tensordot(x, self.w4, axes=[[1, 2], [0, 1]])
-        # y5 = tf.tensordot(x, self.w5, axes=[[1, 2], [0, 1]])
-        # y6 = tf.tensordot(x, self.w6, axes=[[1, 2], [0, 1]])
-        # y7 = tf.tensordot(x, self.w7, axes=[[1, 2], [0, 1]])
-        # y8 = tf.tensordot(x, self.w8, axes=[[1, 2], [0, 1]])
-        # y9 = tf.tensordot(x, self.w9, axes=[[1, 2], [0, 1]])
-
         y = tf.tensordot(x, self.filter, axes=[[1, 2], [0, 1]])
 
         if self.activation == 'softmax':
