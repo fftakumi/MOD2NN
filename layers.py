@@ -316,9 +316,10 @@ class CxD2NNStokes(tf.keras.layers.Layer):
 
 
 class CxD2NNFaradayRotation(tf.keras.layers.Layer):
-    def __init__(self, output_dim):
+    def __init__(self, output_dim, normalization=None):
         super(CxD2NNFaradayRotation, self).__init__()
         self.output_dim = output_dim
+        self.normalization = normalization
 
     def call(self, x, **kwargs):
         rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
@@ -339,6 +340,13 @@ class CxD2NNFaradayRotation(tf.keras.layers.Layer):
 
         S1 = I0 - I90
         S2 = I45 - I135
+
+        theta = tf.atan((S2/S1))/2
+
+        if self.normalization == 'minmax':
+            minimum = tf.reduce_min(theta)
+            maximum = tf.reduce_max(theta)
+            theta = (theta - minimum) / (maximum - minimum)
 
         return tf.atan((S2/S1))/2
 
