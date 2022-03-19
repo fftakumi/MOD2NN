@@ -286,7 +286,7 @@ class ImageResize(tf.keras.layers.Layer):
 
 class CxD2NNStokes(tf.keras.layers.Layer):
     def __init__(self, output_dim):
-        super(InputToCx, self).__init__()
+        super(CxD2NNStokes, self).__init__()
         self.output_dim = output_dim
 
     def call(self, x, **kwargs):
@@ -313,6 +313,35 @@ class CxD2NNStokes(tf.keras.layers.Layer):
         S2 = I45 - I135
 
         return tf.stack([S0, S1, S2], axis=1)
+
+
+class CxD2NNFaradayRotation(tf.keras.layers.Layer):
+    def __init__(self, output_dim):
+        super(CxD2NNFaradayRotation, self).__init__()
+        self.output_dim = output_dim
+
+    def call(self, x, **kwargs):
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
+
+        E0 = rcp_x + lcp_x
+        I0 = E0[:, 0, :, :] ** 2 + E0[:, 1, :, :] ** 2
+        E90 = rcp_y + lcp_y
+        I90 = E90[:, 0, :, :] ** 2 + E90[:, 1, :, :] ** 2
+        E45_x = (rcp_x + rcp_y + lcp_x + lcp_y) / 2
+        E45_y = (rcp_x + rcp_y + lcp_x + lcp_y) / 2
+        I45 = E45_x[:, 0, :, :] ** 2 + E45_x[:, 1, :, :] ** 2 + E45_y[:, 0, :, :] ** 2 + E45_y[:, 1, :, :] ** 2
+        E135_x = (rcp_x - rcp_y + lcp_x - lcp_y) / 2
+        E135_y = (-rcp_x + rcp_y - lcp_x + lcp_y) / 2
+        I135 = E135_x[:, 0, :, :] ** 2 + E135_x[:, 1, :, :] ** 2 + E135_y[:, 0, :, :] ** 2 + E135_y[:, 1, :, :] ** 2
+
+        S1 = I0 - I90
+        S2 = I45 - I135
+
+        return tf.atan((S2/S1))/2
+
 
 
 if __name__ == '__main__':
