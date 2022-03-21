@@ -113,10 +113,10 @@ class FreeSpacePropagation(tf.keras.layers.Layer):
         super(FreeSpacePropagation, self).build(input_shape)
 
     def call(self, x, **kwargs):
-        x_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        y_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
-        x_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        y_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
+        x_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :])(x)
+        y_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :])(x)
+        x_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :])(x)
+        y_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :])(x)
 
         x_rcp = tf.reshape(x_rcp, (-1, 2, x.shape[-1] * x.shape[-2]))
         y_rcp = tf.reshape(y_rcp, (-1, 2, x.shape[-1] * x.shape[-2]))
@@ -162,10 +162,10 @@ class CxD2NNIntensity(tf.keras.layers.Layer):
         self.normalization = normalization
 
     def call(self, x, **kwargs):
-        x_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        y_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
-        x_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        y_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
+        x_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :])(x)
+        y_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :])(x)
+        x_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :])(x)
+        y_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :])(x)
 
         tot_x = x_rcp + x_lcp
         tot_y = y_rcp + y_lcp
@@ -272,7 +272,6 @@ class D2NNMNISTFilter(tf.keras.layers.Layer):
         return tf.multiply(x, self.filter)
 
 
-
 class ImageResize(tf.keras.layers.Layer):
     def __init__(self, output_dim):
         super(ImageResize, self).__init__()
@@ -323,10 +322,10 @@ class CxD2NNFaradayRotation(tf.keras.layers.Layer):
         self.activation = activation
 
     def call(self, x, **kwargs):
-        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :])(x)
 
         E0 = rcp_x + lcp_x
         I0 = E0[:, 0, :, :] ** 2 + E0[:, 1, :, :] ** 2
@@ -342,7 +341,7 @@ class CxD2NNFaradayRotation(tf.keras.layers.Layer):
         S1 = I0 - I90
         S2 = I45 - I135
 
-        theta = tf.atan((S2/S1))/2
+        theta = tf.atan((S2 / S1)) / 2
 
         if self.normalization == 'minmax':
             minimum = tf.reduce_min(theta)
@@ -363,28 +362,23 @@ class Polarizer(tf.keras.layers.Layer):
         self.trainable = trainable
 
     def call(self, x):
-        x_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        y_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
-        x_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
-        y_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
+        x_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :])(x)
+        y_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :])(x)
+        x_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :])(x)
+        y_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :])(x)
 
-        print(self.phi)
+        rcp_x = tf.cos(self.phi) ** 2 * x_rcp + tf.sin(2 * self.phi) / 2 * y_rcp
+        rcp_y = tf.sin(2 * self.phi) / 2 * x_rcp + tf.sin(self.phi) ** 2 * y_rcp
 
-        rcp_x = tf.cos(self.phi)**2 * x_rcp + tf.sin(self.phi) * tf.cos(self.phi) * y_rcp
-        rcp_y = tf.sin(self.phi) * tf.cos(self.phi) * x_rcp + tf.sin(self.phi)**2 * y_rcp
-
-        lcp_x = tf.cos(self.phi)**2 * x_lcp * tf.sin(self.phi) + tf.cos(self.phi) * y_lcp
-        lcp_y = tf.sin(self.phi) * tf.cos(self.phi) * x_lcp + tf.sin(self.phi)**2 * y_lcp
+        lcp_x = tf.cos(self.phi) ** 2 * x_lcp + tf.sin(2 * self.phi) / 2 * y_lcp
+        lcp_y = tf.sin(2 * self.phi) / 2 * x_lcp + tf.sin(self.phi) ** 2 * y_lcp
 
         rcp = tf.concat([rcp_x, rcp_y], axis=1)
         lcp = tf.concat([lcp_x, lcp_y], axis=1)
 
-        print(rcp.shape)
-
         cmpx = tf.stack([rcp, lcp], axis=1)
 
         return cmpx
-
 
 
 if __name__ == '__main__':
