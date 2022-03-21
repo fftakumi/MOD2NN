@@ -316,10 +316,11 @@ class CxD2NNStokes(tf.keras.layers.Layer):
 
 
 class CxD2NNFaradayRotation(tf.keras.layers.Layer):
-    def __init__(self, output_dim, normalization=None):
+    def __init__(self, output_dim, normalization=None, activation=None):
         super(CxD2NNFaradayRotation, self).__init__()
         self.output_dim = output_dim
         self.normalization = normalization
+        self.activation = activation
 
     def call(self, x, **kwargs):
         rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
@@ -348,7 +349,41 @@ class CxD2NNFaradayRotation(tf.keras.layers.Layer):
             maximum = tf.reduce_max(theta)
             theta = (theta - minimum) / (maximum - minimum)
 
-        return tf.atan((S2/S1))/2
+        if self.activation == 'softmax':
+            theta = tf.nn.softmax(theta)
+
+        return theta
+
+
+class Polarizer(tf.keras.layers.Layer):
+    def __init__(self, output_dim, phi=0.0, trainable=False):
+        super(Polarizer, self).__init__()
+        self.output_dim = output_dim
+        self.phi = self.add_weight(shape=(), initializer=tf.initializers.Constant(value=phi))
+        self.trainable = trainable
+
+    def call(self, x):
+        x_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :], output_shape=(self.output_dim,))(x)
+        y_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :], output_shape=(self.output_dim,))(x)
+        x_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :], output_shape=(self.output_dim,))(x)
+        y_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :], output_shape=(self.output_dim,))(x)
+
+        print(self.phi)
+
+        rcp_x = tf.cos(self.phi)**2 * x_rcp + tf.sin(self.phi) * tf.cos(self.phi) * y_rcp
+        rcp_y = tf.sin(self.phi) * tf.cos(self.phi) * x_rcp + tf.sin(self.phi)**2 * y_rcp
+
+        lcp_x = tf.cos(self.phi)**2 * x_lcp * tf.sin(self.phi) + tf.cos(self.phi) * y_lcp
+        lcp_y = tf.sin(self.phi) * tf.cos(self.phi) * x_lcp + tf.sin(self.phi)**2 * y_lcp
+
+        rcp = tf.concat([rcp_x, rcp_y], axis=1)
+        lcp = tf.concat([lcp_x, lcp_y], axis=1)
+
+        print(rcp.shape)
+
+        cmpx = tf.stack([rcp, lcp], axis=1)
+
+        return cmpx
 
 
 
