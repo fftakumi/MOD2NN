@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 
 class InputToCx(tf.keras.layers.Layer):
@@ -23,7 +24,6 @@ class InputToCx(tf.keras.layers.Layer):
 
         rcp = tf.stack([rcp_x_real, rcp_x_imag, rcp_y_real, rcp_y_imag], axis=1) / tf.sqrt(2.0)
         lcp = tf.stack([lcp_x_real, lcp_x_imag, lcp_y_real, lcp_y_imag], axis=1) / tf.sqrt(2.0)
-
         return tf.stack([rcp, lcp], axis=1)
 
 
@@ -74,7 +74,6 @@ class CxMO(tf.keras.layers.Layer):
 
         rcp = tf.stack([rcp_x_real, rcp_x_imag, rcp_y_real, rcp_y_imag], axis=1)
         lcp = tf.stack([lcp_x_real, lcp_x_imag, lcp_y_real, lcp_y_imag], axis=1)
-
         return tf.stack([rcp, lcp], axis=1)
 
 
@@ -178,7 +177,6 @@ class CxD2NNIntensity(tf.keras.layers.Layer):
         elif self.normalization == 'max':
             max = tf.reduce_max(intensity)
             intensity = intensity / max
-
         return intensity
 
 
@@ -379,6 +377,24 @@ class Polarizer(tf.keras.layers.Layer):
         cmpx = tf.stack([rcp, lcp], axis=1)
 
         return cmpx
+
+
+class AngularSpectrum(tf.keras.layers.Layer):
+    def __init__(self,output_dim, k, z=0, d=1e-6):
+        super(AngularSpectrum, self).__init__()
+        self.output_dim = output_dim
+        self.k = k
+        self.z = z
+        self.d = d
+
+    def build(self, input_dim):
+        self.input_dim = input_dim
+
+    def call(self, x):
+        x_rcp = tf.complex(x[:,0,0,:,:], x[:,0,1,:,:])
+        x_rxp_fft = tf.signal.fft2d(x_rcp)
+
+        return x_rxp_fft
 
 
 if __name__ == '__main__':
