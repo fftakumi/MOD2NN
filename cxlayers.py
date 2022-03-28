@@ -64,8 +64,9 @@ class AngularSpectrum(tf.keras.layers.Layer):
 
         rl = tf.stack([rcp, lcp], axis=1)
 
-        if self.normalization=='max':
-            rl = rl / tf.reduce_max(rl)
+        if self.normalization == 'max':
+            maximum = tf.reduce_max(tf.abs(rl))
+            rl = rl / tf.complex(maximum, 0.0*maximum)
 
         return rl
 
@@ -141,9 +142,11 @@ class CxD2NNIntensity(tf.keras.layers.Layer):
 
 
 class CxMO(tf.keras.layers.Layer):
-    def __init__(self, output_dim):
+    def __init__(self, output_dim, limitation=None, limitation_num=1):
         super(CxMO, self).__init__()
         self.output_dim = output_dim
+        self.limitation = limitation
+        self.limitation_num = limitation_num
 
     def build(self, input_dim):
         self.input_dim = input_dim
@@ -153,8 +156,13 @@ class CxMO(tf.keras.layers.Layer):
         super(CxMO, self).build(input_dim)
 
     def call(self, x):
-        mo_p = tf.complex(tf.cos(-self.phi), tf.sin(-self.phi))
-        mo_m = tf.complex(tf.cos(self.phi), tf.sin(self.phi))
+        if self.limitation == 'tanh':
+            phi = self.limitation_num * tf.tanh(self.phi)
+        else:
+            phi = self.phi
+
+        mo_p = tf.complex(tf.cos(-phi), tf.sin(-phi))
+        mo_m = tf.complex(tf.cos(phi), tf.sin(phi))
         rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
         rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
         lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
