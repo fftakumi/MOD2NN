@@ -25,7 +25,7 @@ class AngularSpectrum(tf.keras.layers.Layer):
         v = np.fft.fftfreq(self.padded_height, d=self.d)
         UU, VV = np.meshgrid(u, v)
         w = np.where(UU**2 + VV**2 <= 1/self.wavelength**2, tf.sqrt(1/self.wavelength**2 - UU**2 - VV**2), 0).astype('float64')
-        # h =2*np.pi / (1.0j * self.k * self.z)  * np.exp(1.0j * kz * self.z)
+        # h =2*np.pi / (1.0j * self.k * self.z)  * np.exp(1.0j * 2 * np.pi * w * self.z)
         h = np.exp(1.0j * 2 * np.pi * w * self.z)
 
         if self.method == 'band_limited':
@@ -158,6 +158,8 @@ class CxMO(tf.keras.layers.Layer):
     def call(self, x):
         if self.limitation == 'tanh':
             phi = self.limitation_num * tf.tanh(self.phi)
+        elif self.limitation == 'sin':
+            phi = self.limitation_num * tf.sin(self.phi)
         else:
             phi = self.phi
 
