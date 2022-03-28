@@ -232,6 +232,35 @@ class D2NNMNISTDetector(tf.keras.layers.Layer):
         return y
 
 
+class D2NNMNISTFilter(tf.keras.layers.Layer):
+    def __init__(self, output_dim, activation=None, **kwargs):
+        super(D2NNMNISTFilter, self).__init__(**kwargs)
+        self.output_dim = output_dim
+        self.activation = activation
+
+    def build(self, input_shape):
+        self.input_dim = input_shape
+        width = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
+        height = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
+
+        filter = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
+        filter[2 * height:3 * height, width:2 * width] = 1.0
+        filter[2 * height:3 * height, 4 * width:5 * width] = 1.0
+        filter[2 * height:3 * height, 7 * width:8 * width] = 1.0
+        filter[4 * height:5 * height, 1 * width:2 * width] = 1.0
+        filter[4 * height:5 * height, 3 * width:4 * width] = 1.0
+        filter[4 * height:5 * height, 5 * width:6 * width] = 1.0
+        filter[4 * height:5 * height, 7 * width:8 * width] = 1.0
+        filter[6 * height:7 * height, width:2 * width] = 1.0
+        filter[6 * height:7 * height, 4 * width:5 * width] = 1.0
+        filter[6 * height:7 * height, 7 * width:8 * width] = 1.0
+
+        self.filter = tf.constant(filter)
+
+    def call(self, x, **kwargs):
+        return tf.multiply(x, self.filter)
+
+
 class CxD2NNFaradayRotation(tf.keras.layers.Layer):
     def __init__(self, output_dim, normalization=None, activation=None):
         super(CxD2NNFaradayRotation, self).__init__()
