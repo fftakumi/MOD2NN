@@ -4,7 +4,7 @@ import math
 
 
 class AngularSpectrum(tf.keras.layers.Layer):
-    def __init__(self,output_dim, wavelength, z=0, d=1e-6, normalization=None, method=None):
+    def __init__(self,output_dim, wavelength, z=0, d=1.0e-6, normalization=None, method=None):
         super(AngularSpectrum, self).__init__()
         self.output_dim = output_dim
         self.wavelength = wavelength
@@ -14,39 +14,55 @@ class AngularSpectrum(tf.keras.layers.Layer):
         self.normalization = normalization
         self.method = method
 
+
     def build(self, input_dim):
         self.input_dim = input_dim
-        self.pad_upper = math.ceil(self.input_dim[-2]/2)
-        self.pad_left = math.ceil(self.input_dim[-1]/2)
-        self.padded_width = int(input_dim[-1] + self.pad_left * 2)
-        self.padded_height = int(input_dim[-2] + self.pad_upper * 2)
 
-        u = np.fft.fftfreq(self.padded_width, d=self.d)
-        v = np.fft.fftfreq(self.padded_height, d=self.d)
+        width = self.input_dim[-1]
+        height = self.input_dim[-2]
+        u = np.fft.fftfreq(width, d=self.d)
+        v = np.fft.fftfreq(height, d=self.d)
         UU, VV = np.meshgrid(u, v)
-        w = np.where(UU**2 + VV**2 <= 1/self.wavelength**2, tf.sqrt(1/self.wavelength**2 - UU**2 - VV**2), 0).astype('float64')
-        # h =2*np.pi / (1.0j * self.k * self.z)  * np.exp(1.0j * 2 * np.pi * w * self.z)
+        w = np.where(UU ** 2 + VV ** 2 <= 1 / self.wavelength ** 2, tf.sqrt(1 / self.wavelength**2 - UU**2 - VV**2), 0).astype('float64')
         h = np.exp(1.0j * 2 * np.pi * w * self.z)
 
         if self.method == 'band_limited':
-            du = 1/(2 * self.padded_width * self.d)
-            dv = 1/(2 * self.padded_height * self.d)
+            du = 1/(width * self.d)
+            dv = 1/(height * self.d)
             u_limit = 1/(np.sqrt((2 * du * self.z)**2 + 1)) / self.wavelength
             v_limit = 1/(np.sqrt((2 * dv * self.z)**2 + 1)) / self.wavelength
-            u_filter = np.where(np.abs(UU)/(2*u_limit) < 1/2, 1, 0)
-            v_filter = np.where(np.abs(VV)/(2*v_limit) < 1/2, 1, 0)
+            u_filter = np.where(np.abs(UU)/(2*u_limit) <= 1/2, 1, 0)
+            v_filter = np.where(np.abs(VV)/(2*v_limit) <= 1/2, 1, 0)
             h = h * u_filter * v_filter
+        elif self.method == 'expand':
+            self.pad_upper = math.ceil(self.input_dim[-2] / 2)
+            self.pad_left = math.ceil(self.input_dim[-1] / 2)
+            self.padded_width = int(input_dim[-1] + self.pad_left * 2)
+            self.padded_height = int(input_dim[-2] + self.pad_upper * 2)
+
+            u = np.fft.fftfreq(self.padded_width, d=self.d)
+            v = np.fft.fftfreq(self.padded_height, d=self.d)
+            UU, VV = np.meshgrid(u, v)
+            w = np.where(UU ** 2 + VV ** 2 <= 1 / self.wavelength ** 2, tf.sqrt(1 / self.wavelength ** 2 - UU ** 2 - VV ** 2), 0).astype('float64')
+            h = np.exp(1.0j * 2 * np.pi * w * self.z)
 
         self.res = tf.cast(tf.complex(h.real, h.imag), dtype=tf.complex64)
 
     @tf.function
     def propagation(self, cximages):
-        padding = [[0,0],[self.pad_upper, self.pad_upper],[self.pad_left, self.pad_left]]
-        images_pad = tf.pad(cximages, paddings=padding)
-        images_pad_fft = tf.signal.fft2d(images_pad)
-        u_images_pad = tf.signal.ifft2d(images_pad_fft * self.res)
-        u_images = tf.keras.layers.Lambda(lambda x:x[:, self.pad_upper:self.pad_upper + self.input_dim[-2], self.pad_left:self.pad_left + self.input_dim[-1]])(u_images_pad)
-        return u_images
+        if self.method=='band_limited':
+            images_fft = tf.signal.fft2d(cximages)
+            return tf.signal.ifft2d(images_fft * self.res)
+        elif self.method=='expand':
+            padding = [[0,0],[self.pad_upper, self.pad_upper],[self.pad_left, self.pad_left]]
+            images_pad = tf.pad(cximages, paddings=padding)
+            images_pad_fft = tf.signal.fft2d(images_pad)
+            u_images_pad = tf.signal.ifft2d(images_pad_fft * self.res)
+            u_images = tf.keras.layers.Lambda(lambda x:x[:, self.pad_upper:self.pad_upper + self.input_dim[-2], self.pad_left:self.pad_left + self.input_dim[-1]])(u_images_pad)
+            return u_images
+        else:
+            images_fft = tf.signal.fft2d(cximages)
+            return tf.signal.ifft2d(images_fft * self.res)
 
     def call(self, x):
         rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
@@ -341,3 +357,17 @@ class Polarizer(tf.keras.layers.Layer):
         rl = tf.stack([rcp, lcp], axis=1)
 
         return rl
+
+
+class Dielectric(tf.keras.layers.Layer):
+    def __init__(self, tensor):
+        super(Dielectric, self).__init__()
+        self.tensor = tf.complex(tensor, 0.0 * tensor)
+
+    def call(self, x):
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+
+
