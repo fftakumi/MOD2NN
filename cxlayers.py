@@ -64,6 +64,7 @@ class AngularSpectrum(tf.keras.layers.Layer):
             images_fft = tf.signal.fft2d(cximages)
             return tf.signal.ifft2d(images_fft * self.res)
 
+    @tf.function
     def call(self, x):
         rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
         rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
@@ -301,15 +302,15 @@ class CxD2NNFaradayRotation(tf.keras.layers.Layer):
         lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
 
         E0 = rcp_x + lcp_x
-        I0 = tf.abs(E0)
+        I0 = tf.abs(E0)**2
         E90 = rcp_y + lcp_y
-        I90 = tf.abs(E90)
+        I90 = tf.abs(E90)**2
         E45_x = (rcp_x + rcp_y + lcp_x + lcp_y) / 2.0
         E45_y = (rcp_x + rcp_y + lcp_x + lcp_y) / 2.0
-        I45 = tf.abs(E45_x) + tf.abs(E45_y)
+        I45 = tf.abs(E45_x)**2 + tf.abs(E45_y)**2
         E135_x = (rcp_x - rcp_y + lcp_x - lcp_y) / 2.0
         E135_y = (-rcp_x + rcp_y - lcp_x + lcp_y) / 2.0
-        I135 = tf.abs(E135_x) + tf.abs(E135_y)
+        I135 = tf.abs(E135_x)**2 + tf.abs(E135_y)**2
 
         S1 = I0 - I90
         S2 = I45 - I135
