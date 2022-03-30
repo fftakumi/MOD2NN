@@ -332,7 +332,7 @@ class Polarizer(tf.keras.layers.Layer):
     def __init__(self, output_dim, phi=0.0, trainable=False):
         super(Polarizer, self).__init__()
         self.output_dim = output_dim
-        self.phi = self.add_weight(shape=[1], initializer=tf.initializers.Constant(value=phi))
+        self.phi = self.add_weight("phi",shape=[1], initializer=tf.initializers.Constant(value=phi))
         self.trainable = trainable
 
     def call(self, x):
