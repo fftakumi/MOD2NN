@@ -174,14 +174,14 @@ class CxMO(tf.keras.layers.Layer):
 
     def call(self, x):
         if self.limitation == 'tanh':
-            phi = self.limitation_num * tf.tanh(self.phi)
+            phi_lim = self.limitation_num * tf.tanh(self.phi)
         elif self.limitation == 'sin':
-            phi = self.limitation_num * tf.sin(self.phi)
+            phi_lim = self.limitation_num * tf.sin(self.phi)
         else:
-            phi = self.phi
+            phi_lim = self.phi
 
-        mo_p = tf.complex(tf.cos(-phi), tf.sin(-phi))
-        mo_m = tf.complex(tf.cos(phi), tf.sin(phi))
+        mo_p = tf.complex(tf.cos(-phi_lim), tf.sin(-phi_lim))
+        mo_m = tf.complex(tf.cos(phi_lim), tf.sin(phi_lim))
         rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
         rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
         lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
