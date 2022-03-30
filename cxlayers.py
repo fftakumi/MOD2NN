@@ -180,17 +180,19 @@ class CxMO(tf.keras.layers.Layer):
         else:
             phi_lim = self.phi
 
-        mo_p = tf.complex(tf.cos(-phi_lim), tf.sin(-phi_lim))
-        mo_m = tf.complex(tf.cos(phi_lim), tf.sin(phi_lim))
+        # phi_rcp = tf.complex(tf.cos(-phi_lim), tf.sin(-phi_lim))
+        # phi_lcp = tf.complex(tf.cos(phi_lim), tf.sin(phi_lim))
+        phi_rcp = tf.exp(1.0j * -phi_lim)
+        phi_lcp = tf.exp(1.0j * phi_lim)
         rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
         rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
         lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
         lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
 
-        rcp_x = rcp_x * mo_p
-        rcp_y = rcp_y * mo_p
-        lcp_x = lcp_x * mo_m
-        lcp_y = lcp_y * mo_m
+        rcp_x = rcp_x * phi_rcp
+        rcp_y = rcp_y * phi_rcp
+        lcp_x = lcp_x * phi_lcp
+        lcp_y = lcp_y * phi_lcp
 
         rcp = tf.stack([rcp_x, rcp_y], axis=1)
         lcp = tf.stack([lcp_x, lcp_y], axis=1)
