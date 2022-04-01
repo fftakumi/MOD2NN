@@ -27,8 +27,8 @@ class AngularSpectrum(tf.keras.layers.Layer):
         h = np.exp(1.0j * 2 * np.pi * w * self.z)
 
         if self.method == 'band_limited':
-            du = 1/(width * self.d)
-            dv = 1/(height * self.d)
+            du = 1/(2*width * self.d)
+            dv = 1/(2*height * self.d)
             u_limit = 1/(np.sqrt((2 * du * self.z)**2 + 1)) / self.wavelength
             v_limit = 1/(np.sqrt((2 * dv * self.z)**2 + 1)) / self.wavelength
             u_filter = np.where(np.abs(UU)/(2*u_limit) <= 1/2, 1, 0)
@@ -42,9 +42,19 @@ class AngularSpectrum(tf.keras.layers.Layer):
 
             u = np.fft.fftfreq(self.padded_width, d=self.d)
             v = np.fft.fftfreq(self.padded_height, d=self.d)
+
+            du = 1 / (self.padded_width * self.d)
+            dv = 1 / (self.padded_height * self.d)
+            u_limit = 1 / (np.sqrt((2 * du * self.z) ** 2 + 1)) / self.wavelength
+            v_limit = 1 / (np.sqrt((2 * dv * self.z) ** 2 + 1)) / self.wavelength
             UU, VV = np.meshgrid(u, v)
+
+            u_filter = np.where(np.abs(UU) / (2 * u_limit) <= 1 / 2, 1, 0)
+            v_filter = np.where(np.abs(VV) / (2 * v_limit) <= 1 / 2, 1, 0)
+
             w = np.where(UU ** 2 + VV ** 2 <= 1 / self.wavelength ** 2, tf.sqrt(1 / self.wavelength ** 2 - UU ** 2 - VV ** 2), 0).astype('float64')
             h = np.exp(1.0j * 2 * np.pi * w * self.z)
+            h = h * u_filter * v_filter
 
         self.res = tf.cast(tf.complex(h.real, h.imag), dtype=tf.complex64)
 
@@ -120,19 +130,23 @@ class ImageBinarization(tf.keras.layers.Layer):
         return tf.where(x >= self.threshold, self.maximum, self.minimum)
 
 
-class InputToCx(tf.keras.layers.Layer):
-    def __init__(self, output_dim):
-        super(InputToCx, self).__init__()
+class ImageToElectricField(tf.keras.layers.Layer):
+    def __init__(self, output_dim, a=0.5, b=0.5):
+        super(ImageToElectricField, self).__init__()
         self.output_dim = output_dim
+        self.a = a
+        self.b = b
 
+    @tf.function
     def call(self, x):
-        rcp_x = tf.complex(x/ tf.sqrt(2.0), 0.0*x)
-        rcp_y = 1.0j * tf.complex(x/ tf.sqrt(2.0), 0.0*x)
-        lcp_x = tf.complex(x/ tf.sqrt(2.0), 0.0*x)
-        lcp_y = -1.0j * tf.complex(x/ tf.sqrt(2.0), 0.0*x)
+        rcp_x = tf.complex(tf.sqrt(self.a*x), 0.0*x)
+        rcp_y = 1.0j * tf.complex(tf.sqrt(self.a * x), 0.0*x)
+        lcp_x = tf.complex(tf.sqrt(self.b*x), 0.0*x)
+        lcp_y = -1.0j * tf.complex(tf.sqrt(self.b*x), 0.0*x)
         rcp = tf.stack([rcp_x, rcp_y], axis=1)
         lcp = tf.stack([lcp_x, lcp_y], axis=1)
         return tf.stack([rcp, lcp], axis=1)
+
 
 
 class CxD2NNIntensity(tf.keras.layers.Layer):
@@ -150,7 +164,7 @@ class CxD2NNIntensity(tf.keras.layers.Layer):
         tot_x = rcp_x + lcp_x
         tot_y = rcp_y + lcp_y
 
-        intensity = tf.abs(tot_x)**2 + tf.abs(tot_y)**2
+        intensity = tf.abs(tot_x)**2 / 2.0 + tf.abs(tot_y)**2 / 2.0
 
         if self.normalization== 'max':
             intensity = intensity / tf.reduce_max(intensity)
@@ -304,15 +318,15 @@ class CxD2NNFaradayRotation(tf.keras.layers.Layer):
         lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
 
         E0 = rcp_x + lcp_x
-        I0 = tf.abs(E0)**2
+        I0 = tf.abs(E0)**2 / 2.0
         E90 = rcp_y + lcp_y
-        I90 = tf.abs(E90)**2
+        I90 = tf.abs(E90)**2 / 2.0
         E45_x = (rcp_x + rcp_y + lcp_x + lcp_y) / 2.0
         E45_y = (rcp_x + rcp_y + lcp_x + lcp_y) / 2.0
-        I45 = tf.abs(E45_x)**2 + tf.abs(E45_y)**2
+        I45 = tf.abs(E45_x)**2/2+tf.abs(E45_y)**2 / 2.0
         E135_x = (rcp_x - rcp_y + lcp_x - lcp_y) / 2.0
         E135_y = (-rcp_x + rcp_y - lcp_x + lcp_y) / 2.0
-        I135 = tf.abs(E135_x)**2 + tf.abs(E135_y)**2
+        I135 = tf.abs(E135_x)**2/2 + tf.abs(E135_y)**2 / 2.0
 
         S1 = I0 - I90
         S2 = I45 - I135
