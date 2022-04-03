@@ -4,13 +4,14 @@ import math
 
 
 class AngularSpectrum(tf.keras.layers.Layer):
-    def __init__(self,output_dim, wavelength, z=0, d=1.0e-6, normalization=None, method=None):
+    def __init__(self,output_dim, wavelength, z=0, d=1.0e-6, n=1, normalization=None, method=None):
         super(AngularSpectrum, self).__init__()
         self.output_dim = output_dim
-        self.wavelength = wavelength
+        self.wavelength = wavelength / n
         self.k = 2 * np.pi / self.wavelength
         self.z = z
         self.d = d
+        self.n = n
         self.normalization = normalization
         self.method = method
 
@@ -49,8 +50,8 @@ class AngularSpectrum(tf.keras.layers.Layer):
             v_limit = 1 / (np.sqrt((2 * dv * self.z) ** 2 + 1)) / self.wavelength
             UU, VV = np.meshgrid(u, v)
 
-            u_filter = np.where(np.abs(UU) / (2 * u_limit) <= 1 / 2, 1, 0)
-            v_filter = np.where(np.abs(VV) / (2 * v_limit) <= 1 / 2, 1, 0)
+            u_filter = np.where(np.abs(UU) <= u_limit, 1, 0)
+            v_filter = np.where(np.abs(VV) <= v_limit, 1, 0)
 
             w = np.where(UU ** 2 + VV ** 2 <= 1 / self.wavelength ** 2, tf.sqrt(1 / self.wavelength ** 2 - UU ** 2 - VV ** 2), 0).astype('float64')
             h = np.exp(1.0j * 2 * np.pi * w * self.z)
@@ -386,5 +387,8 @@ class Dielectric(tf.keras.layers.Layer):
         rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
         lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
         lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        
 
-
+class GGG(AngularSpectrum):
+    def __init__(self, output_dim, wavelength, z=0, d=1.0e-6, normalization=None, method=None):
+        super(GGG, self).__init__(output_dim, wavelength, z=z, d=d, n=3.0, normalization=normalization, method=method)
