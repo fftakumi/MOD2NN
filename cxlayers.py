@@ -391,4 +391,4 @@ class Dielectric(tf.keras.layers.Layer):
 
 class GGG(AngularSpectrum):
     def __init__(self, output_dim, wavelength, z=0, d=1.0e-6, normalization=None, method=None):
-        super(GGG, self).__init__(output_dim, wavelength, z=z, d=d, n=3.0, normalization=normalization, method=method)
+        super(GGG, self).__init__(output_dim, wavelength, z=z, d=d, n=2.0, normalization=normalization, method=method)
