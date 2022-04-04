@@ -140,10 +140,10 @@ class ImageToElectricField(tf.keras.layers.Layer):
 
     @tf.function
     def call(self, x):
-        rcp_x = tf.complex(tf.sqrt(self.a*x), 0.0*x)
-        rcp_y = 1.0j * tf.complex(tf.sqrt(self.a * x), 0.0*x)
-        lcp_x = tf.complex(tf.sqrt(self.b*x), 0.0*x)
-        lcp_y = -1.0j * tf.complex(tf.sqrt(self.b*x), 0.0*x)
+        rcp_x = tf.complex(tf.sqrt(x/2), 0.0*x)
+        rcp_y = 1.0j * tf.complex(tf.sqrt(x/2), 0.0*x)
+        lcp_x = tf.complex(tf.sqrt(x/2), 0.0*x)
+        lcp_y = -1.0j * tf.complex(tf.sqrt(x/2), 0.0*x)
         rcp = tf.stack([rcp_x, rcp_y], axis=1)
         lcp = tf.stack([lcp_x, lcp_y], axis=1)
         return tf.stack([rcp, lcp], axis=1)
