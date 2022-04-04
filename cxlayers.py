@@ -195,10 +195,10 @@ class CxMO(tf.keras.layers.Layer):
         else:
             phi_lim = self.phi
 
-        # phi_rcp = tf.complex(tf.cos(-phi_lim), tf.sin(-phi_lim))
-        # phi_lcp = tf.complex(tf.cos(phi_lim), tf.sin(phi_lim))
-        phi_rcp = tf.exp(1.0j * -phi_lim)
-        phi_lcp = tf.exp(1.0j * phi_lim)
+        phi_rcp = tf.complex(tf.cos(-phi_lim), tf.sin(-phi_lim))
+        phi_lcp = tf.complex(tf.cos(phi_lim), tf.sin(phi_lim))
+        #phi_rcp = tf.exp(1.0j * -phi_lim)
+        #phi_lcp = tf.exp(1.0j * phi_lim)
         rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
         rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
         lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
