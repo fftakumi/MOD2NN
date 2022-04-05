@@ -167,7 +167,7 @@ class CxD2NNIntensity(tf.keras.layers.Layer):
 
         intensity = tf.abs(tot_x)**2 / 2.0 + tf.abs(tot_y)**2 / 2.0
 
-        if self.normalization== 'max':
+        if self.normalization == 'max':
             intensity = intensity / tf.reduce_max(intensity)
 
         return intensity
@@ -216,11 +216,12 @@ class CxMO(tf.keras.layers.Layer):
 
 
 class D2NNMNISTDetector(tf.keras.layers.Layer):
-    def __init__(self, output_dim, activation=None, normalization=None, **kwargs):
+    def __init__(self, output_dim, activation=None, normalization=None, avoid_zero=False, **kwargs):
         super(D2NNMNISTDetector, self).__init__(**kwargs)
         self.output_dim = output_dim
         self.activation = activation
         self.normalization = normalization
+        self.avoid_zero = avoid_zero
 
     def build(self, input_shape):
         self.input_dim = input_shape
@@ -279,6 +280,9 @@ class D2NNMNISTDetector(tf.keras.layers.Layer):
 
         if self.activation == 'softmax':
             y = tf.nn.softmax(y)
+
+        if self.avoid_zero:
+            y = y + 1.0e-12
 
         return y
 
@@ -340,6 +344,7 @@ class CxD2NNFaradayRotation(tf.keras.layers.Layer):
         S2 = I45 - I135
 
         theta = tf.atan((S2 / S1)) / 2.0
+
 
         if self.normalization == 'minmax':
             minimum = tf.reduce_min(theta)
