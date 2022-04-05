@@ -4,7 +4,7 @@ import math
 
 
 class AngularSpectrum(tf.keras.layers.Layer):
-    def __init__(self,output_dim, wavelength, z=0, d=1.0e-6, n=1, normalization=None, method=None):
+    def __init__(self,output_dim, wavelength, z=0.0, d=1.0e-6, n=1, normalization=None, method=None):
         super(AngularSpectrum, self).__init__()
         self.output_dim = output_dim
         self.wavelength = wavelength / n
@@ -197,8 +197,9 @@ class CxMO(tf.keras.layers.Layer):
 
         phi_rcp = tf.complex(tf.cos(-phi_lim), tf.sin(-phi_lim))
         phi_lcp = tf.complex(tf.cos(phi_lim), tf.sin(phi_lim))
-        #phi_rcp = tf.exp(1.0j * -phi_lim)
-        #phi_lcp = tf.exp(1.0j * phi_lim)
+        # phi_rcp = tf.exp(1.0j * -phi_lim)
+        #
+        # phi_lcp = tf.exp(1.0j * phi_lim)
         rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
         rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
         lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
@@ -215,10 +216,11 @@ class CxMO(tf.keras.layers.Layer):
 
 
 class D2NNMNISTDetector(tf.keras.layers.Layer):
-    def __init__(self, output_dim, activation=None, **kwargs):
+    def __init__(self, output_dim, activation=None, normalization=None, **kwargs):
         super(D2NNMNISTDetector, self).__init__(**kwargs)
         self.output_dim = output_dim
         self.activation = activation
+        self.normalization = normalization
 
     def build(self, input_shape):
         self.input_dim = input_shape
@@ -269,6 +271,11 @@ class D2NNMNISTDetector(tf.keras.layers.Layer):
 
     def call(self, x, **kwargs):
         y = tf.tensordot(x, self.filter, axes=[[1, 2], [0, 1]])
+
+        if self.normalization == 'minmax':
+            maximum = tf.reduce_max(y)
+            minimum = tf.reduce_min(y)
+            y = (y - minimum)/(maximum - minimum)
 
         if self.activation == 'softmax':
             y = tf.nn.softmax(y)
@@ -390,5 +397,5 @@ class Dielectric(tf.keras.layers.Layer):
         
 
 class GGG(AngularSpectrum):
-    def __init__(self, output_dim, wavelength, z=0, d=1.0e-6, normalization=None, method=None):
+    def __init__(self, output_dim, wavelength, z=0.0, d=1.0e-6, normalization=None, method=None):
         super(GGG, self).__init__(output_dim, wavelength, z=z, d=d, n=2.0, normalization=normalization, method=method)
