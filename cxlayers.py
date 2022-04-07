@@ -317,11 +317,12 @@ class D2NNMNISTFilter(tf.keras.layers.Layer):
 
 
 class CxD2NNFaradayRotation(tf.keras.layers.Layer):
-    def __init__(self, output_dim, normalization=None, activation=None):
+    def __init__(self, output_dim, normalization=None, activation=None, avoid_zero=False):
         super(CxD2NNFaradayRotation, self).__init__()
         self.output_dim = output_dim
         self.normalization = normalization
         self.activation = activation
+        self.avoid_zero = avoid_zero
 
     def call(self, x, **kwargs):
         rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
@@ -353,6 +354,9 @@ class CxD2NNFaradayRotation(tf.keras.layers.Layer):
 
         if self.activation == 'softmax':
             theta = tf.nn.softmax(theta)
+
+        if self.avoid_zero:
+            theta = theta + 1.0e-12
 
         return theta
 
