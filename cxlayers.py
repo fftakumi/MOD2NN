@@ -157,10 +157,10 @@ class CxD2NNIntensity(tf.keras.layers.Layer):
         self.normalization = normalization
 
     def call(self, x):
-        rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
 
         tot_x = rcp_x + lcp_x
         tot_y = rcp_y + lcp_y
