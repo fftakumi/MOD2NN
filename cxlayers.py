@@ -4,14 +4,19 @@ import math
 
 
 class AngularSpectrum(tf.keras.layers.Layer):
-    def __init__(self,output_dim, wavelength, z=0.0, d=1.0e-6, n=1, normalization=None, method=None):
+    def __init__(self,output_dim, wavelength=633e-9, z=0.0, d=1.0e-6, n=1.0, normalization=None, method=None):
         super(AngularSpectrum, self).__init__()
         self.output_dim = output_dim
-        self.wavelength = wavelength / n
-        self.k = 2 * np.pi / self.wavelength
-        self.z = z
-        self.d = d
-        self.n = n
+        # self.wavelength = wavelength / n
+        # self.k = 2 * np.pi / self.wavelength
+        # self.z = z
+        # self.d = d
+        # self.n = n
+        self.wavelength = tf.Variable(wavelength / n, trainable=False, name="wavelength")
+        self.k = tf.Variable(2 * np.pi / self.wavelength, trainable=False, name="wavenumber")
+        self.z =  tf.Variable(z, trainable=False, name="z")
+        self.d = tf.Variable(d, trainable=False, name="d")
+        self.n = tf.Variable(n, trainable=False, name="n")
         self.normalization = normalization
         self.method = method
 
@@ -19,19 +24,23 @@ class AngularSpectrum(tf.keras.layers.Layer):
     def build(self, input_dim):
         self.input_dim = input_dim
 
+        wavelength = self.wavelength.numpy()
+        z = self.z.numpy()
+        d = self.d.numpy()
+
         width = self.input_dim[-1]
         height = self.input_dim[-2]
-        u = np.fft.fftfreq(width, d=self.d)
-        v = np.fft.fftfreq(height, d=self.d)
+        u = np.fft.fftfreq(width, d=d)
+        v = np.fft.fftfreq(height, d=d)
         UU, VV = np.meshgrid(u, v)
-        w = np.where(UU ** 2 + VV ** 2 <= 1 / self.wavelength ** 2, tf.sqrt(1 / self.wavelength**2 - UU**2 - VV**2), 0).astype('float64')
-        h = np.exp(1.0j * 2 * np.pi * w * self.z)
+        w = np.where(UU ** 2 + VV ** 2 <= 1 / wavelength ** 2, tf.sqrt(1 / wavelength**2 - UU**2 - VV**2), 0).astype('float64')
+        h = np.exp(1.0j * 2 * np.pi * w * z)
 
         if self.method == 'band_limited':
-            du = 1/(2*width * self.d)
-            dv = 1/(2*height * self.d)
-            u_limit = 1/(np.sqrt((2 * du * self.z)**2 + 1)) / self.wavelength
-            v_limit = 1/(np.sqrt((2 * dv * self.z)**2 + 1)) / self.wavelength
+            du = 1/(2*width * d)
+            dv = 1/(2*height * d)
+            u_limit = 1/(np.sqrt((2 * du * z)**2 + 1)) / wavelength
+            v_limit = 1/(np.sqrt((2 * dv * z)**2 + 1)) / wavelength
             u_filter = np.where(np.abs(UU)/(2*u_limit) <= 1/2, 1, 0)
             v_filter = np.where(np.abs(VV)/(2*v_limit) <= 1/2, 1, 0)
             h = h * u_filter * v_filter
@@ -41,20 +50,20 @@ class AngularSpectrum(tf.keras.layers.Layer):
             self.padded_width = int(input_dim[-1] + self.pad_left * 2)
             self.padded_height = int(input_dim[-2] + self.pad_upper * 2)
 
-            u = np.fft.fftfreq(self.padded_width, d=self.d)
-            v = np.fft.fftfreq(self.padded_height, d=self.d)
+            u = np.fft.fftfreq(self.padded_width, d=d)
+            v = np.fft.fftfreq(self.padded_height, d=d)
 
-            du = 1 / (self.padded_width * self.d)
-            dv = 1 / (self.padded_height * self.d)
-            u_limit = 1 / (np.sqrt((2 * du * self.z) ** 2 + 1)) / self.wavelength
-            v_limit = 1 / (np.sqrt((2 * dv * self.z) ** 2 + 1)) / self.wavelength
+            du = 1 / (self.padded_width * d)
+            dv = 1 / (self.padded_height * d)
+            u_limit = 1 / (np.sqrt((2 * du * z) ** 2 + 1)) / wavelength
+            v_limit = 1 / (np.sqrt((2 * dv * z) ** 2 + 1)) / wavelength
             UU, VV = np.meshgrid(u, v)
 
             u_filter = np.where(np.abs(UU) <= u_limit, 1, 0)
             v_filter = np.where(np.abs(VV) <= v_limit, 1, 0)
 
-            w = np.where(UU ** 2 + VV ** 2 <= 1 / self.wavelength ** 2, tf.sqrt(1 / self.wavelength ** 2 - UU ** 2 - VV ** 2), 0).astype('float64')
-            h = np.exp(1.0j * 2 * np.pi * w * self.z)
+            w = np.where(UU ** 2 + VV ** 2 <= 1 / wavelength ** 2, tf.sqrt(1 / wavelength ** 2 - UU ** 2 - VV ** 2), 0).astype('float64')
+            h = np.exp(1.0j * 2 * np.pi * w * z)
             h = h * u_filter * v_filter
 
         self.res = tf.cast(tf.complex(h.real, h.imag), dtype=tf.complex64)
@@ -140,10 +149,10 @@ class ImageToElectricField(tf.keras.layers.Layer):
 
     @tf.function
     def call(self, x):
-        rcp_x = tf.complex(tf.sqrt(x/2), 0.0*x)
-        rcp_y = 1.0j * tf.complex(tf.sqrt(x/2), 0.0*x)
-        lcp_x = tf.complex(tf.sqrt(x/2), 0.0*x)
-        lcp_y = -1.0j * tf.complex(tf.sqrt(x/2), 0.0*x)
+        rcp_x = tf.complex(tf.sqrt(x/2.0), 0.0*x)
+        rcp_y = 1.0j * tf.complex(tf.sqrt(x/2.0), 0.0*x)
+        lcp_x = tf.complex(tf.sqrt(x/2.0), 0.0*x)
+        lcp_y = -1.0j * tf.complex(tf.sqrt(x/2.0), 0.0*x)
         rcp = tf.stack([rcp_x, rcp_y], axis=1)
         lcp = tf.stack([lcp_x, lcp_y], axis=1)
         return tf.stack([rcp, lcp], axis=1)
@@ -174,11 +183,16 @@ class CxD2NNIntensity(tf.keras.layers.Layer):
 
 
 class CxMO(tf.keras.layers.Layer):
-    def __init__(self, output_dim, limitation=None, limitation_num=1):
+    def __init__(self, output_dim, limitation=None, limitation_num=1.0):
         super(CxMO, self).__init__()
         self.output_dim = output_dim
-        self.limitation = limitation
-        self.limitation_num = limitation_num
+        if limitation is not None:
+            self.limitation = tf.Variable(limitation, validate_shape=False, name="limitation", trainable=False)
+            self.limitation = limitation
+        else:
+            self.limitation = tf.Variable("None", validate_shape=False, name="limitation", trainable=False)
+            self.limitation = limitation
+        self.limitation_num = tf.Variable(limitation_num, validate_shape=False, name="limitation_num", trainable=False)
 
     def build(self, input_dim):
         self.input_dim = input_dim
@@ -365,7 +379,7 @@ class Polarizer(tf.keras.layers.Layer):
     def __init__(self, output_dim, phi=0.0, trainable=False):
         super(Polarizer, self).__init__()
         self.output_dim = output_dim
-        self.phi = self.add_weight("phi",shape=[1], initializer=tf.initializers.Constant(value=phi))
+        self.phi = tf.Variable(phi, name="phi", trainable=trainable)
         self.trainable = trainable
 
     def call(self, x):
@@ -374,10 +388,10 @@ class Polarizer(tf.keras.layers.Layer):
         lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
         lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
 
-        p00 = tf.complex(tf.cos(self.phi[0])**2, 0.0)
-        p01 = tf.complex(tf.sin(2 * self.phi[0]) / 2, 0.0)
+        p00 = tf.complex(tf.cos(self.phi)**2, 0.0)
+        p01 = tf.complex(tf.sin(2 * self.phi) / 2, 0.0)
         p10 = p01
-        p11 = tf.complex(tf.sin(self.phi[0])**2, 0.0)
+        p11 = tf.complex(tf.sin(self.phi)**2, 0.0)
 
         rcp_x_pol = p00 * rcp_x + p01 * rcp_y
         rcp_y_pol = p10 * rcp_x + p11 * rcp_y
