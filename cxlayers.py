@@ -424,3 +424,41 @@ class GGG(AngularSpectrum):
         super(GGG, self).__init__(output_dim, wavelength, z=z, d=d, n=2.0, normalization=normalization, method=method)
 
 
+class Argument(tf.keras.layers.Layer):
+    def __init__(self, output_dim):
+        super(Argument, self).__init__()
+        self.output_dim = output_dim
+
+    @tf.function
+    def calc_argument(self, cmpx):
+        real = tf.math.real(cmpx)
+        imag = tf.math.imag(cmpx)
+
+        arg = tf.where(tf.not_equal(imag, 0.0), 2.0*tf.atan((tf.sqrt(real**2 + imag**2)-real)/imag), 0.0)
+        arg = tf.where((real > 0.0) & (tf.equal(imag, 0.0)), 0.0, arg)
+        arg = tf.where((real < 0.0) & tf.equal(imag, 0.0), np.pi, arg)
+        arg = tf.where(tf.equal(real, 0.0) & tf.equal(imag, 0.0), 0.0, arg)
+
+        return arg
+
+    def call(self, x):
+        rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
+
+        rcp_arg = self.calc_argument(rcp_x)
+        lcp_arg = self.calc_argument(lcp_x)
+
+        delta_phi = (rcp_arg - lcp_arg)/2.0
+
+        return delta_phi
+
+
+class PhaseToPeriodic(tf.keras.layers.Layer):
+    def __init__(self, output_dim):
+        super(PhaseToPeriodic, self).__init__()
+        self.output_dim = output_dim
+
+    def call(self, x):
+        return tf.sin(x)
