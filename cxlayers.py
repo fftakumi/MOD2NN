@@ -462,3 +462,12 @@ class PhaseToPeriodic(tf.keras.layers.Layer):
 
     def call(self, x):
         return tf.sin(x)
+
+
+class Softmax(tf.keras.layers.Layer):
+    def __init__(self, eps=0.0):
+        super(Softmax, self).__init__()
+        self.eps = tf.Variable(eps, trainable=False, name="epsilon")
+
+    def call(self, x):
+        return tf.nn.softmax(x, axis=-1) + self.eps
