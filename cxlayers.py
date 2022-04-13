@@ -471,3 +471,13 @@ class Softmax(tf.keras.layers.Layer):
 
     def call(self, x):
         return tf.nn.softmax(x, axis=-1) + self.eps
+
+
+class MinMaxNormalization(tf.keras.layers.Layer):
+    def __init__(self):
+        super(MinMaxNormalization, self).__init__()
+
+    def call(self, x):
+        maximum = tf.reduce_max(x)
+        minimum = tf.reduce_min(x)
+        return tf.nn.softmax(x, axis=-1) + self.eps
