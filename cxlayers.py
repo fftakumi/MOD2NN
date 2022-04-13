@@ -182,6 +182,13 @@ class ImageToElectricField(tf.keras.layers.Layer):
         super(ImageToElectricField, self).__init__()
         self.output_dim = output_dim
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim
+        })
+        return config
+
     @tf.function
     def call(self, x):
         rcp_x = tf.complex(tf.sqrt(x/2.0), 0.0*x)
