@@ -20,6 +20,23 @@ class AngularSpectrum(tf.keras.layers.Layer):
         self.normalization = normalization
         self.method = method
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "wavelength": self.wavelength.numpy(),
+            "k": self.k.numpy(),
+            "z": self.z.numpy(),
+            "d": self.d.numpy(),
+            "n": self.n.numpy(),
+            "normalization": self.normalization,
+            "method": self.method
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     def build(self, input_dim):
         self.input_dim = input_dim
@@ -123,6 +140,13 @@ class ImageResizing(tf.keras.layers.Layer):
         super(ImageResizing, self).__init__()
         self.output_dim = output_dim
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim
+        })
+        return config
+
     def call(self, x):
         x_expnad = tf.image.resize(tf.expand_dims(x, -1), self.output_dim)
         x_expnad = tf.keras.layers.Lambda(lambda x: x[:, :, :, 0])(x_expnad)
@@ -130,22 +154,33 @@ class ImageResizing(tf.keras.layers.Layer):
 
 
 class ImageBinarization(tf.keras.layers.Layer):
-    def __init__(self, threshold, minimum, maximum):
+    def __init__(self, threshold=0.5, minimum=0.0, maximum=1.0):
         super(ImageBinarization, self).__init__()
         self.threshold = threshold
         self.minimum = minimum
         self.maximum = maximum
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "threshold": self.threshold,
+            "minimum": self.minimum,
+            "maximum": self.maximum
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     def call(self, x):
         return tf.where(x >= self.threshold, self.maximum, self.minimum)
 
 
 class ImageToElectricField(tf.keras.layers.Layer):
-    def __init__(self, output_dim, a=0.5, b=0.5):
+    def __init__(self, output_dim):
         super(ImageToElectricField, self).__init__()
         self.output_dim = output_dim
-        self.a = a
-        self.b = b
 
     @tf.function
     def call(self, x):
@@ -164,6 +199,18 @@ class CxD2NNIntensity(tf.keras.layers.Layer):
         super(CxD2NNIntensity, self).__init__()
         self.output_dim = output_dim
         self.normalization = normalization
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "normalization": self.normalization
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     def call(self, x):
         rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
@@ -201,6 +248,20 @@ class CxMO(tf.keras.layers.Layer):
                                           int(input_dim[-1])])
         super(CxMO, self).build(input_dim)
 
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "limitation": self.limitation,
+            "limitation_num": self.limitation_num.numpy()
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
     def call(self, x):
         if self.limitation == 'tanh':
             phi_lim = self.limitation_num * tf.tanh(self.phi)
@@ -230,12 +291,24 @@ class CxMO(tf.keras.layers.Layer):
 
 
 class D2NNMNISTDetector(tf.keras.layers.Layer):
-    def __init__(self, output_dim, activation=None, normalization=None, avoid_zero=False, **kwargs):
+    def __init__(self, output_dim, activation=None, normalization=None, **kwargs):
         super(D2NNMNISTDetector, self).__init__(**kwargs)
         self.output_dim = output_dim
         self.activation = activation
         self.normalization = normalization
-        self.avoid_zero = avoid_zero
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "activation": self.activation,
+            "normalization": self.normalization
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     def build(self, input_shape):
         self.input_dim = input_shape
@@ -295,9 +368,6 @@ class D2NNMNISTDetector(tf.keras.layers.Layer):
         if self.activation == 'softmax':
             y = tf.nn.softmax(y)
 
-        if self.avoid_zero:
-            y = y + 1.0e-12
-
         return y
 
 
@@ -306,6 +376,18 @@ class D2NNMNISTFilter(tf.keras.layers.Layer):
         super(D2NNMNISTFilter, self).__init__(**kwargs)
         self.output_dim = output_dim
         self.activation = activation
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "activation": self.activation
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     def build(self, input_shape):
         self.input_dim = input_shape
@@ -336,7 +418,19 @@ class CxD2NNFaradayRotation(tf.keras.layers.Layer):
         self.output_dim = output_dim
         self.normalization = normalization
         self.activation = activation
-        self.avoid_zero = avoid_zero
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "normalization":  self.normalization,
+            "activation": self.activation
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     def call(self, x, **kwargs):
         rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
@@ -381,6 +475,19 @@ class Polarizer(tf.keras.layers.Layer):
         self.output_dim = output_dim
         self.phi = tf.Variable(phi, name="phi", trainable=trainable)
         self.trainable = trainable
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "phi":  self.phi.numpy(),
+            "trainable": self.trainable
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     def call(self, x):
         rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
@@ -429,6 +536,17 @@ class Argument(tf.keras.layers.Layer):
         super(Argument, self).__init__()
         self.output_dim = output_dim
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
     @tf.function
     def calc_argument(self, cmpx):
         real = tf.math.real(cmpx)
@@ -468,6 +586,17 @@ class Softmax(tf.keras.layers.Layer):
     def __init__(self, eps=0.0):
         super(Softmax, self).__init__()
         self.eps = tf.Variable(eps, trainable=False, name="epsilon")
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "eps": self.eps.numpy()
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     def call(self, x):
         return tf.nn.softmax(x, axis=-1) + self.eps
