@@ -503,7 +503,7 @@ class Polarizer(tf.keras.layers.Layer):
         lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
 
         p00 = tf.complex(tf.cos(-self.phi)**2.0, 0.0)
-        p01 = tf.complex(tf.sin(2.0 * -self.phi) / 2.0, 0.0)
+        p01 = tf.complex(tf.sin(-2.0 * self.phi) / 2.0, 0.0)
         p10 = p01
         p11 = tf.complex(tf.sin(-self.phi)**2.0, 0.0)
 
