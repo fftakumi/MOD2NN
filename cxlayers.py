@@ -255,6 +255,15 @@ class CxMO(tf.keras.layers.Layer):
                                           int(input_dim[-1])])
         super(CxMO, self).build(input_dim)
 
+    @tf.function
+    def get_limited_phi(self):
+        if self.limitation == 'tanh':
+            return self.limitation_num * tf.tanh(self.phi)
+        elif self.limitation == 'sin':
+            return self.limitation_num * tf.sin(self.phi)
+        else:
+            return self.phi
+
 
     def get_config(self):
         config = super().get_config()
@@ -270,18 +279,11 @@ class CxMO(tf.keras.layers.Layer):
         return cls(**config)
 
     def call(self, x):
-        if self.limitation == 'tanh':
-            phi_lim = self.limitation_num * tf.tanh(self.phi)
-        elif self.limitation == 'sin':
-            phi_lim = self.limitation_num * tf.sin(self.phi)
-        else:
-            phi_lim = self.phi
+        phi_lim = self.get_limited_phi()
 
         phi_rcp = tf.complex(tf.cos(phi_lim), tf.sin(phi_lim))
         phi_lcp = tf.complex(tf.cos(-phi_lim), tf.sin(-phi_lim))
-        # phi_rcp = tf.exp(1.0j * -phi_lim)
-        #
-        # phi_lcp = tf.exp(1.0j * phi_lim)
+
         rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
         rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
         lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
