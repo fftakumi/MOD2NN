@@ -422,7 +422,7 @@ class D2NNMNISTFilter(tf.keras.layers.Layer):
 
 
 class CxD2NNFaradayRotation(tf.keras.layers.Layer):
-    def __init__(self, output_dim, normalization=None, activation=None, avoid_zero=False):
+    def __init__(self, output_dim, normalization=None, activation=None):
         super(CxD2NNFaradayRotation, self).__init__()
         self.output_dim = output_dim
         self.normalization = normalization
@@ -453,7 +453,7 @@ class CxD2NNFaradayRotation(tf.keras.layers.Layer):
         I90 = tf.abs(E90)**2 / 2.0
         E45_x = (rcp_x - rcp_y + lcp_x - lcp_y) / 2.0
         E45_y = (-rcp_x + rcp_y - lcp_x + lcp_y) / 2.0
-        I45 = tf.abs(E45_x)**2/2+tf.abs(E45_y)**2 / 2.0
+        I45 = tf.abs(E45_x)**2/2 + tf.abs(E45_y)**2 / 2.0
         E135_x = (rcp_x + rcp_y + lcp_x + lcp_y) / 2.0
         E135_y = (rcp_x + rcp_y + lcp_x + lcp_y) / 2.0
         I135 = tf.abs(E135_x)**2/2 + tf.abs(E135_y)**2 / 2.0
@@ -471,9 +471,6 @@ class CxD2NNFaradayRotation(tf.keras.layers.Layer):
 
         if self.activation == 'softmax':
             theta = tf.nn.softmax(theta)
-
-        if self.avoid_zero:
-            theta = theta + 1.0e-12
 
         return theta
 
@@ -586,6 +583,17 @@ class PhaseToPeriodic(tf.keras.layers.Layer):
     def __init__(self, output_dim):
         super(PhaseToPeriodic, self).__init__()
         self.output_dim = output_dim
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     def call(self, x):
         return tf.sin(x)
