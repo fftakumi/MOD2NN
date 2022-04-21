@@ -422,18 +422,20 @@ class D2NNMNISTFilter(tf.keras.layers.Layer):
 
 
 class CxD2NNFaradayRotation(tf.keras.layers.Layer):
-    def __init__(self, output_dim, normalization=None, activation=None):
+    def __init__(self, output_dim, normalization=None, activation=None, eps=1.0e-20):
         super(CxD2NNFaradayRotation, self).__init__()
         self.output_dim = output_dim
         self.normalization = normalization
         self.activation = activation
+        self.eps = eps
 
     def get_config(self):
         config = super().get_config()
         config.update({
             "output_dim": self.output_dim,
             "normalization":  self.normalization,
-            "activation": self.activation
+            "activation": self.activation,
+            "eps": self.eps
         })
         return config
 
@@ -461,9 +463,7 @@ class CxD2NNFaradayRotation(tf.keras.layers.Layer):
         S1 = I0 - I90
         S2 = I45 - I135
 
-        # theta = tf.where(S1 > 0.0, tf.atan(S2 / S1) / 2.0, 0.0)
-        theta = tf.atan(S2 / S1) / 2.0
-
+        theta = tf.where(S1**2 > self.eps, tf.atan(S2*S1 / S1**2) / 2.0, tf.atan(S2*S1 / self.eps) / 2.0,)
 
         if self.normalization == 'minmax':
             minimum = tf.reduce_min(theta)
