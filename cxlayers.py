@@ -178,23 +178,27 @@ class ImageBinarization(tf.keras.layers.Layer):
 
 
 class ImageToElectricField(tf.keras.layers.Layer):
-    def __init__(self, output_dim):
+    def __init__(self, output_dim, ini_phi=0.0):
         super(ImageToElectricField, self).__init__()
         self.output_dim = output_dim
+        self.ini_phi = tf.Variable(ini_phi, name="ini_phi", trainable=False)
+        self.rcp_ini_phi = tf.complex(tf.cos(ini_phi), tf.sin(ini_phi))
+        self.lcp_ini_phi = tf.complex(tf.cos(-ini_phi), tf.sin(-ini_phi))
 
     def get_config(self):
         config = super().get_config()
         config.update({
-            "output_dim": self.output_dim
+            "output_dim": self.output_dim,
+            "ini_phi": self.ini_phi
         })
         return config
 
     @tf.function
     def call(self, x):
-        rcp_x = tf.complex(tf.sqrt(x/2.0), 0.0*x)
-        rcp_y = 1.0j * tf.complex(tf.sqrt(x/2.0), 0.0*x)
-        lcp_x = tf.complex(tf.sqrt(x/2.0), 0.0*x)
-        lcp_y = -1.0j * tf.complex(tf.sqrt(x/2.0), 0.0*x)
+        rcp_x = tf.complex(tf.sqrt(x/2.0), 0.0*x) * self.rcp_ini_phi
+        rcp_y = 1.0j * tf.complex(tf.sqrt(x/2.0), 0.0*x) * self.rcp_ini_phi
+        lcp_x = tf.complex(tf.sqrt(x/2.0), 0.0*x) * self.lcp_ini_phi
+        lcp_y = -1.0j * tf.complex(tf.sqrt(x/2.0), 0.0*x) * self.lcp_ini_phi
         rcp = tf.stack([rcp_x, rcp_y], axis=1)
         lcp = tf.stack([lcp_x, lcp_y], axis=1)
         return tf.stack([rcp, lcp], axis=1)
