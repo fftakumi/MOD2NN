@@ -463,7 +463,8 @@ class CxD2NNFaradayRotation(tf.keras.layers.Layer):
         S1 = I0 - I90
         S2 = I45 - I135
 
-        theta = tf.where(S1**2 > self.eps, tf.atan(S2*S1 / S1**2) / 2.0, tf.atan(S2*S1 / self.eps) / 2.0,)
+        # theta = tf.where(S1**2 > self.eps, tf.atan(S2*S1 / S1**2) / 2.0, tf.atan(S2*S1 / self.eps) / 2.0,)
+        theta = tf.atan(S2*S1 / (S1**2 + self.eps)) / 2.0
 
         if self.normalization == 'minmax':
             minimum = tf.reduce_min(theta)
