@@ -1,190 +1,342 @@
 import tensorflow as tf
 import numpy as np
-import matplotlib.pyplot as plt
-import time
+import math
 
 
-class InputToCx(tf.keras.layers.Layer):
+class AngularSpectrum(tf.keras.layers.Layer):
+    def __init__(self,output_dim, wavelength=633e-9, z=0.0, d=1.0e-6, n=1.0, normalization=None, method=None):
+        super(AngularSpectrum, self).__init__()
+        self.output_dim = output_dim
+        # self.wavelength = wavelength / n
+        # self.k = 2 * np.pi / self.wavelength
+        # self.z = z
+        # self.d = d
+        # self.n = n
+        self.wavelength = wavelength
+        self.wavelength_eff = wavelength / n
+        self.k = 2 * np.pi / self.wavelength_eff
+        self.z = z
+        self.d = d
+        self.n = n
+        self.normalization = normalization if normalization is not None else "None"
+        self.method = method if method is not None else "None"
+
+        assert self.k >= 0.0
+        assert self.z >= 0.0
+        assert self.d > 0.0
+        assert self.n > 0.0
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "wavelength": self.wavelength,
+            "k": self.k,
+            "z": self.z,
+            "d": self.d,
+            "n": self.n,
+            "normalization": self.normalization,
+            "method": self.method
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
+    def build(self, input_dim):
+        self.input_dim = input_dim
+
+        width = self.input_dim[-1]
+        height = self.input_dim[-2]
+        u = np.fft.fftfreq(width, d=self.d)
+        v = np.fft.fftfreq(height, d=self.d)
+        UU, VV = np.meshgrid(u, v)
+        w = np.where(UU ** 2 + VV ** 2 <= 1 / self.wavelength ** 2, tf.sqrt(1 / self.wavelength**2 - UU**2 - VV**2), 0).astype('float64')
+        h = np.exp(1.0j * 2 * np.pi * w * self.z)
+
+        if self.method == 'band_limited':
+            du = 1/(2*width * self.d)
+            dv = 1/(2*height * self.d)
+            u_limit = 1/(np.sqrt((2 * du * self.z)**2 + 1)) / self.wavelength
+            v_limit = 1/(np.sqrt((2 * dv * self.z)**2 + 1)) / self.wavelength
+            u_filter = np.where(np.abs(UU)/(2*u_limit) <= 1/2, 1, 0)
+            v_filter = np.where(np.abs(VV)/(2*v_limit) <= 1/2, 1, 0)
+            h = h * u_filter * v_filter
+        elif self.method == 'expand':
+            self.pad_upper = math.ceil(self.input_dim[-2] / 2)
+            self.pad_left = math.ceil(self.input_dim[-1] / 2)
+            self.padded_width = int(input_dim[-1] + self.pad_left * 2)
+            self.padded_height = int(input_dim[-2] + self.pad_upper * 2)
+
+            u = np.fft.fftfreq(self.padded_width, d=self.d)
+            v = np.fft.fftfreq(self.padded_height, d=self.d)
+
+            du = 1 / (self.padded_width * self.d)
+            dv = 1 / (self.padded_height * self.d)
+            u_limit = 1 / (np.sqrt((2 * du * self.z) ** 2 + 1)) / self.wavelength
+            v_limit = 1 / (np.sqrt((2 * dv * self.z) ** 2 + 1)) / self.wavelength
+            UU, VV = np.meshgrid(u, v)
+
+            u_filter = np.where(np.abs(UU) <= u_limit, 1, 0)
+            v_filter = np.where(np.abs(VV) <= v_limit, 1, 0)
+
+            w = np.where(UU ** 2 + VV ** 2 <= 1 / self.wavelength ** 2, tf.sqrt(1 / self.wavelength ** 2 - UU ** 2 - VV ** 2), 0).astype('float64')
+            h = np.exp(1.0j * 2 * np.pi * w * self.z)
+            h = h * u_filter * v_filter
+
+        self.res = tf.cast(tf.complex(h.real, h.imag), dtype=tf.complex64)
+
+    @tf.function
+    def propagation(self, cximages):
+        if self.method=='band_limited':
+            images_fft = tf.signal.fft2d(cximages)
+            return tf.signal.ifft2d(images_fft * self.res)
+        elif self.method=='expand':
+            padding = [[0,0],[self.pad_upper, self.pad_upper],[self.pad_left, self.pad_left]]
+            images_pad = tf.pad(cximages, paddings=padding)
+            images_pad_fft = tf.signal.fft2d(images_pad)
+            u_images_pad = tf.signal.ifft2d(images_pad_fft * self.res)
+            u_images = tf.keras.layers.Lambda(lambda x:x[:, self.pad_upper:self.pad_upper + self.input_dim[-2], self.pad_left:self.pad_left + self.input_dim[-1]])(u_images_pad)
+            return u_images
+        else:
+            images_fft = tf.signal.fft2d(cximages)
+            return tf.signal.ifft2d(images_fft * self.res)
+
+    @tf.function
+    def call(self, x):
+        rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
+
+        u_rcp_x = self.propagation(rcp_x)
+        u_rcp_y = self.propagation(rcp_y)
+        u_lcp_x = self.propagation(lcp_x)
+        u_lcp_y = self.propagation(lcp_y)
+
+        rcp = tf.stack([u_rcp_x, u_rcp_y], axis=1)
+        lcp = tf.stack([u_lcp_x, u_lcp_y], axis=1)
+
+        rl = tf.stack([rcp, lcp], axis=1)
+
+        if self.normalization == 'max':
+            maximum = tf.reduce_max(tf.abs(rl))
+            rl = rl / tf.complex(maximum, 0.0*maximum)
+
+        return rl
+
+
+class CxTest(tf.keras.layers.Layer):
     def __init__(self, output_dim):
-        super(InputToCx, self).__init__()
+        super(CxTest, self).__init__()
         self.output_dim = output_dim
 
     def call(self, inputs, **kwargs):
-        ini_phase = 0.0
-        delta = 0.0
-        rcp_x_real = inputs * tf.cos(ini_phase) / tf.sqrt(2.0)
-        rcp_x_imag = inputs * tf.sin(ini_phase) / tf.sqrt(2.0)
-        rcp_y_real = inputs * -tf.sin(ini_phase) / tf.sqrt(2.0)
-        rcp_y_imag = inputs * tf.cos(ini_phase) / tf.sqrt(2.0)
 
-        lcp_x_real = inputs * tf.cos(ini_phase - delta) / tf.sqrt(2.0)
-        lcp_x_imag = inputs * tf.sin(ini_phase - delta) / tf.sqrt(2.0)
-        lcp_y_real = inputs * tf.sin(ini_phase - delta) / tf.sqrt(2.0)
-        lcp_y_imag = inputs * -tf.cos(ini_phase - delta) / tf.sqrt(2.0)
-
-        rcp = tf.stack([rcp_x_real, rcp_x_imag, rcp_y_real, rcp_y_imag], axis=1) / tf.sqrt(2.0)
-        lcp = tf.stack([lcp_x_real, lcp_x_imag, lcp_y_real, lcp_y_imag], axis=1) / tf.sqrt(2.0)
-        return tf.stack([rcp, lcp], axis=1)
+        return inputs**2
 
 
-class CxMO(tf.keras.layers.Layer):
-    def __init__(self, output_dim, limitation=None, limitation_num=1):
-        super(CxMO, self).__init__()
+class ImageResizing(tf.keras.layers.Layer):
+    def __init__(self, output_dim):
+        super(ImageResizing, self).__init__()
         self.output_dim = output_dim
-        self.limitation = limitation
-        self.limitation_num = limitation_num
 
-    def build(self, input_dim):
-        self.phi = self.add_weight("phi",
-                                   shape=[int(input_dim[-2]),
-                                          int(input_dim[-1])])
-
-        super(CxMO, self).build(input_dim)
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim
+        })
+        return config
 
     def call(self, x):
-        x_rcp = x[:, 0, 0:2, :, :]
-        y_rcp = x[:, 0, 2:4, :, :]
-        x_lcp = x[:, 1, 0:2, :, :]
-        y_lcp = x[:, 1, 2:4, :, :]
+        x_expnad = tf.image.resize(tf.expand_dims(x, -1), self.output_dim)
+        x_expnad = tf.keras.layers.Lambda(lambda x: x[:, :, :, 0])(x_expnad)
+        return x_expnad
 
-        # x_rcp[0,:,:] : real
-        # x_rcp[1,:,:] : imag
 
-        if self.limitation == 'sigmoid':
-            mo_real = tf.cos(self.limitation_num * tf.math.sigmoid(self.phi))
-            mo_imag = tf.sin(self.limitation_num * tf.math.sigmoid(self.phi))
-        elif self.limitation == 'tanh':
-            mo_real = tf.cos(self.limitation_num * tf.math.tanh(self.phi))
-            mo_imag = tf.sin(self.limitation_num * tf.math.tanh(self.phi))
-        else:
-            mo_real = tf.cos(self.phi)
-            mo_imag = tf.sin(self.phi)
+class ImageBinarization(tf.keras.layers.Layer):
+    def __init__(self, threshold=0.5, minimum=0.0, maximum=1.0):
+        super(ImageBinarization, self).__init__()
+        self.threshold = threshold
+        self.minimum = minimum
+        self.maximum = maximum
 
-        rcp_x_real = x_rcp[:, 0, :, :] * mo_real - x_rcp[:, 1, :, :] * mo_imag
-        rcp_x_imag = x_rcp[:, 0, :, :] * mo_imag + x_rcp[:, 1, :, :] * mo_real
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "threshold": self.threshold,
+            "minimum": self.minimum,
+            "maximum": self.maximum
+        })
+        return config
 
-        rcp_y_real = y_rcp[:, 0, :, :] * mo_real - y_rcp[:, 1, :, :] * mo_imag
-        rcp_y_imag = y_rcp[:, 0, :, :] * mo_imag + y_rcp[:, 1, :, :] * mo_real
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
-        lcp_x_real = x_lcp[:, 0, :, :] * mo_real - x_lcp[:, 1, :, :] * -mo_imag
-        lcp_x_imag = x_lcp[:, 0, :, :] * -mo_imag + x_lcp[:, 1, :, :] * mo_real
+    def call(self, x):
+        return tf.where(x >= self.threshold, self.maximum, self.minimum)
 
-        lcp_y_real = y_lcp[:, 0, :, :] * mo_real - y_lcp[:, 1, :, :] * -mo_imag
-        lcp_y_imag = y_lcp[:, 0, :, :] * -mo_imag + y_lcp[:, 1, :, :] * mo_real
 
-        rcp = tf.stack([rcp_x_real, rcp_x_imag, rcp_y_real, rcp_y_imag], axis=1)
-        lcp = tf.stack([lcp_x_real, lcp_x_imag, lcp_y_real, lcp_y_imag], axis=1)
+class IntensityToElectricField(tf.keras.layers.Layer):
+    def __init__(self, output_dim):
+        super(IntensityToElectricField, self).__init__()
+        self.output_dim = output_dim
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim
+        })
+        return config
+
+    @tf.function
+    def call(self, x):
+        rcp_x = tf.complex(tf.sqrt(x/2.0), 0.0*x)
+        rcp_y = 1.0j * tf.complex(tf.sqrt(x/2.0), 0.0*x)
+        lcp_x = tf.complex(tf.sqrt(x/2.0), 0.0*x)
+        lcp_y = -1.0j * tf.complex(tf.sqrt(x/2.0), 0.0*x)
+        rcp = tf.stack([rcp_x, rcp_y], axis=1)
+        lcp = tf.stack([lcp_x, lcp_y], axis=1)
         return tf.stack([rcp, lcp], axis=1)
 
 
-class FreeSpacePropagation(tf.keras.layers.Layer):
-    def __init__(self, output_dim, k, z, input_pitch=1e-6, output_pitch=1e-6, normalization=None):
-        super(FreeSpacePropagation, self).__init__()
+
+class ElectricFieldToIntensity(tf.keras.layers.Layer):
+    def __init__(self, output_dim, normalization=None):
+        super(ElectricFieldToIntensity, self).__init__()
         self.output_dim = output_dim
-        self.input_pitch = input_pitch
-        self.output_pitch = output_pitch
-        self.z = z
-        self.k = k
         self.normalization = normalization
 
-    def build(self, input_shape):
-        x1 = np.arange(0, input_shape[-1], 1)
-        y1 = np.arange(0, input_shape[-2], 1)
-        xx1, yy1 = np.meshgrid(x1, y1)
-        xx1 = xx1.reshape(-1, 1) - input_shape[-1] / 2
-        yy1 = yy1.reshape(-1, 1) - input_shape[-2] / 2
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "normalization": self.normalization
+        })
+        return config
 
-        x2 = np.arange(0, self.output_dim[1], 1)
-        y2 = np.arange(0, self.output_dim[0], 1)
-        xx2, yy2 = np.meshgrid(x2, y2)
-        xx2 = xx2.reshape(1, -1) - self.output_dim[1] / 2
-        yy2 = yy2.reshape(1, -1) - self.output_dim[0] / 2
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
-        dx = (self.output_pitch * xx2 - self.input_pitch * xx1)
-        dy = (self.output_pitch * yy2 - self.input_pitch * yy1)
-        r = np.sqrt(dx ** 2 + dy ** 2 + self.z ** 2)
-        self.r = r
-        w = 1.0 / (2.0 * np.pi) * self.z / r * (1.0 / r - 1.0j * self.k) * np.exp(1.0j * self.k * r)
+    def call(self, x):
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
 
-        self.w_real = tf.constant(w.real.astype('float32'))
-        self.w_imag = tf.constant(w.imag.astype('float32'))
+        tot_x = rcp_x + lcp_x
+        tot_y = rcp_y + lcp_y
 
-        super(FreeSpacePropagation, self).build(input_shape)
-
-    def call(self, x, **kwargs):
-        x_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :])(x)
-        y_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :])(x)
-        x_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :])(x)
-        y_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :])(x)
-
-        x_rcp = tf.reshape(x_rcp, (-1, 2, x.shape[-1] * x.shape[-2]))
-        y_rcp = tf.reshape(y_rcp, (-1, 2, x.shape[-1] * x.shape[-2]))
-        x_lcp = tf.reshape(x_lcp, (-1, 2, x.shape[-1] * x.shape[-2]))
-        y_lcp = tf.reshape(y_lcp, (-1, 2, x.shape[-1] * x.shape[-2]))
-
-        rcp_x_real = tf.matmul(x_rcp[:, 0, :], self.w_real) - tf.matmul(x_rcp[:, 1, :], self.w_imag)
-        rcp_x_imag = tf.matmul(x_rcp[:, 0, :], self.w_imag) + tf.matmul(x_rcp[:, 1, :], self.w_real)
-        rcp_x_real = tf.reshape(rcp_x_real, (-1, self.output_dim[0], self.output_dim[1]))
-        rcp_x_imag = tf.reshape(rcp_x_imag, (-1, self.output_dim[0], self.output_dim[1]))
-
-        rcp_y_real = tf.matmul(y_rcp[:, 0, :], self.w_real) - tf.matmul(y_rcp[:, 1, :], self.w_imag)
-        rcp_y_imag = tf.matmul(y_rcp[:, 0, :], self.w_imag) + tf.matmul(y_rcp[:, 1, :], self.w_real)
-        rcp_y_real = tf.reshape(rcp_y_real, (-1, self.output_dim[0], self.output_dim[1]))
-        rcp_y_imag = tf.reshape(rcp_y_imag, (-1, self.output_dim[0], self.output_dim[1]))
-
-        lcp_x_real = tf.matmul(x_lcp[:, 0, :], self.w_real) - tf.matmul(x_lcp[:, 1, :], self.w_imag)
-        lcp_x_imag = tf.matmul(x_lcp[:, 0, :], self.w_imag) + tf.matmul(x_lcp[:, 1, :], self.w_real)
-        lcp_x_real = tf.reshape(lcp_x_real, (-1, self.output_dim[0], self.output_dim[1]))
-        lcp_x_imag = tf.reshape(lcp_x_imag, (-1, self.output_dim[0], self.output_dim[1]))
-
-        lcp_y_real = tf.matmul(y_lcp[:, 0, :], self.w_real) - tf.matmul(y_lcp[:, 1, :], self.w_imag)
-        lcp_y_imag = tf.matmul(y_lcp[:, 0, :], self.w_imag) + tf.matmul(y_lcp[:, 1, :], self.w_real)
-        lcp_y_real = tf.reshape(lcp_y_real, (-1, self.output_dim[0], self.output_dim[1]))
-        lcp_y_imag = tf.reshape(lcp_y_imag, (-1, self.output_dim[0], self.output_dim[1]))
-
-        rcp = tf.stack([rcp_x_real, rcp_x_imag, rcp_y_real, rcp_y_imag], axis=1)
-        lcp = tf.stack([lcp_x_real, lcp_x_imag, lcp_y_real, lcp_y_imag], axis=1)
-
-        cmpx = tf.stack([rcp, lcp], axis=1)
+        intensity = tf.abs(tot_x)**2 / 2.0 + tf.abs(tot_y)**2 / 2.0
 
         if self.normalization == 'max':
-            absmax = tf.reduce_max(tf.abs(cmpx))
-            cmpx = cmpx / absmax
+            intensity = intensity / tf.reduce_max(intensity)
 
-        return cmpx
-
-
-class CxD2NNIntensity(tf.keras.layers.Layer):
-    def __init__(self, output_dim, normalization='max', **kwargs):
-        super(CxD2NNIntensity, self).__init__(**kwargs)
-        self.output_dim = output_dim
-        self.normalization = normalization
-
-    def call(self, x, **kwargs):
-        x_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :])(x)
-        y_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :])(x)
-        x_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :])(x)
-        y_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :])(x)
-
-        tot_x = x_rcp + x_lcp
-        tot_y = y_rcp + y_lcp
-
-        intensity = tot_x[:, 0, :, :] ** 2 + tot_x[:, 1, :, :] ** 2 + tot_y[:, 0, :, :] ** 2 + tot_y[:, 1, :, :] ** 2
-        if self.normalization == 'min_max':
-            max = tf.reduce_max(intensity)
-            min = tf.reduce_min(intensity)
-            intensity = (intensity - min) / (max - min)
-        elif self.normalization == 'max':
-            max = tf.reduce_max(intensity)
-            intensity = intensity / max
         return intensity
 
 
-class D2NNMNISTDetector(tf.keras.layers.Layer):
-    def __init__(self, output_dim, activation=None, **kwargs):
-        super(D2NNMNISTDetector, self).__init__(**kwargs)
+class MO(tf.keras.layers.Layer):
+    def __init__(self, output_dim, limitation=None, theta_max=0.0, eta_max=0.0):
+        super(MO, self).__init__()
+        self.output_dim = output_dim
+
+        self.limitation = limitation if limitation is not None else "None"
+        self.theta_max = tf.Variable(theta_max, validate_shape=False, name="theta_max", trainable=False)
+        self.eta_max = tf.Variable(eta_max, validate_shape=False, name="eta_max", trainable=False)
+        assert len(self.output_dim) == 2
+        assert self.theta_max.numpy() >= 0.0
+        assert self.eta_max.numpy() >= 0.0
+
+    def build(self, input_dim):
+        self.input_dim = input_dim
+        self.mag = self.add_weight("magnetization",
+                                 shape=[int(input_dim[-2]),
+                                        int(input_dim[-1])])
+        super(MO, self).build(input_dim)
+
+    @tf.function
+    def get_limited_theta(self):
+        if self.limitation == 'tanh':
+            return self.theta_max * tf.tanh(self.mag)
+        elif self.limitation == 'sin':
+            return self.theta_max * tf.sin(self.mag)
+        elif self.limitation == 'sigmoid':
+            return self.theta_max * tf.sigmoid(self.mag)
+        else:
+            return self.mag
+
+    @tf.function
+    def get_limited_eta(self):
+        if self.limitation == 'tanh':
+            return self.eta_max * tf.tanh(self.mag)
+        elif self.limitation == 'sin':
+            return self.eta_max * tf.sin(self.mag)
+        elif self.limitation == 'sigmoid':
+            return self.eta_max * tf.sigmoid(self.mag)
+        else:
+            return self.mag
+
+    @tf.function
+    def get_limited_complex_faraday(self):
+        theta = self.get_limited_theta()
+        eta = self.get_limited_eta()
+        return tf.complex(theta, eta)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "limitation": self.limitation,
+            "theta_max": self.theta_max.numpy(),
+            "eta_max": self.eta_max.numpy()
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
+    def call(self, x):
+        theta_lim = tf.complex(self.get_limited_theta(), 0.0)
+        eta_lim = tf.complex(self.get_limited_eta(), 0.0)
+
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+
+        rcp_x = (1.0 + eta_lim) * rcp_x * tf.exp(1.0j * theta_lim)
+        rcp_y = (1.0 + eta_lim) * rcp_y * tf.exp(1.0j * theta_lim)
+        lcp_x = (1.0 - eta_lim) * lcp_x * tf.exp(-1.0j * theta_lim)
+        lcp_y = (1.0 - eta_lim) * lcp_y * tf.exp(-1.0j * theta_lim)
+
+        rcp = tf.stack([rcp_x, rcp_y], axis=1)
+        lcp = tf.stack([lcp_x, lcp_y], axis=1)
+        return tf.stack([rcp, lcp], axis=1)
+
+
+class MNISTDetector(tf.keras.layers.Layer):
+    def __init__(self, output_dim, activation=None, normalization=None, **kwargs):
+        super(MNISTDetector, self).__init__(**kwargs)
         self.output_dim = output_dim
         self.activation = activation
+        self.normalization = normalization
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "activation": self.activation,
+            "normalization": self.normalization
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     def build(self, input_shape):
         self.input_dim = input_shape
@@ -236,16 +388,34 @@ class D2NNMNISTDetector(tf.keras.layers.Layer):
     def call(self, x, **kwargs):
         y = tf.tensordot(x, self.filter, axes=[[1, 2], [0, 1]])
 
+        if self.normalization == 'minmax':
+            maximum = tf.reduce_max(y)
+            minimum = tf.reduce_min(y)
+            y = (y - minimum)/(maximum - minimum)
+
         if self.activation == 'softmax':
             y = tf.nn.softmax(y)
+
         return y
 
 
-class D2NNMNISTFilter(tf.keras.layers.Layer):
+class MNISTFilter(tf.keras.layers.Layer):
     def __init__(self, output_dim, activation=None, **kwargs):
-        super(D2NNMNISTFilter, self).__init__(**kwargs)
+        super(MNISTFilter, self).__init__(**kwargs)
         self.output_dim = output_dim
         self.activation = activation
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "activation": self.activation
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     def build(self, input_shape):
         self.input_dim = input_shape
@@ -270,76 +440,50 @@ class D2NNMNISTFilter(tf.keras.layers.Layer):
         return tf.multiply(x, self.filter)
 
 
-class ImageResize(tf.keras.layers.Layer):
-    def __init__(self, output_dim):
-        super(ImageResize, self).__init__()
-        self.output_dim = output_dim
-
-    def call(self, x):
-        x_expnad = tf.image.resize(tf.expand_dims(x, -1), self.output_dim)
-        x_expnad = tf.keras.layers.Lambda(lambda x: x[:, :, :, 0])(x_expnad)
-        return x_expnad
-
-
-class CxD2NNStokes(tf.keras.layers.Layer):
-    def __init__(self, output_dim):
-        super(CxD2NNStokes, self).__init__()
-        self.output_dim = output_dim
-
-    def call(self, x, **kwargs):
-        rcp_x = x[0, 0, 0:2, :, :]
-        rcp_y = x[0, 0, 2:4, :, :]
-        lcp_x = x[0, 1, 0:2, :, :]
-        lcp_y = x[0, 1, 2:4, :, :]
-
-        E0 = rcp_x + lcp_x
-        I0 = E0[0, :, :] ** 2 + E0[1, :, :] ** 2
-        E90 = rcp_y + lcp_y
-        I90 = E90[0, :, :] ** 2 + E90[1, :, :] ** 2
-        E45_x = (rcp_x + rcp_y + lcp_x + lcp_y) / 2
-        E45_y = (rcp_x + rcp_y + lcp_x + lcp_y) / 2
-        I45 = E45_x[0, :, :] ** 2 + E45_x[1, :, :] ** 2 + E45_y[0, :, :] ** 2 + E45_y[1, :, :] ** 2
-        E135_x = (rcp_x - rcp_y + lcp_x - lcp_y) / 2
-        E135_y = (-rcp_x + rcp_y - lcp_x + lcp_y) / 2
-        I135 = E135_x[0, :, :] ** 2 + E135_x[1, :, :] ** 2 + E135_y[0, :, :] ** 2 + E135_y[1, :, :] ** 2
-        E_tot_x = rcp_x + lcp_x
-        E_tot_y = rcp_y + lcp_y
-
-        S0 = (I0 + I90 + I45 + I135) / 2
-        S1 = I0 - I90
-        S2 = I45 - I135
-
-        return tf.stack([S0, S1, S2], axis=1)
-
-
-class CxD2NNFaradayRotation(tf.keras.layers.Layer):
-    def __init__(self, output_dim, normalization=None, activation=None):
-        super(CxD2NNFaradayRotation, self).__init__()
+class FaradayRotation(tf.keras.layers.Layer):
+    def __init__(self, output_dim, normalization=None, activation=None, eps=1.0e-20):
+        super(FaradayRotation, self).__init__()
         self.output_dim = output_dim
         self.normalization = normalization
         self.activation = activation
+        self.eps = eps
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "normalization":  self.normalization,
+            "activation": self.activation,
+            "eps": self.eps
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
 
     def call(self, x, **kwargs):
-        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :])(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
 
         E0 = rcp_x + lcp_x
-        I0 = E0[:, 0, :, :] ** 2 + E0[:, 1, :, :] ** 2
+        I0 = tf.abs(E0)**2 / 2.0
         E90 = rcp_y + lcp_y
-        I90 = E90[:, 0, :, :] ** 2 + E90[:, 1, :, :] ** 2
-        E45_x = (rcp_x + rcp_y + lcp_x + lcp_y) / 2
-        E45_y = (rcp_x + rcp_y + lcp_x + lcp_y) / 2
-        I45 = E45_x[:, 0, :, :] ** 2 + E45_x[:, 1, :, :] ** 2 + E45_y[:, 0, :, :] ** 2 + E45_y[:, 1, :, :] ** 2
-        E135_x = (rcp_x - rcp_y + lcp_x - lcp_y) / 2
-        E135_y = (-rcp_x + rcp_y - lcp_x + lcp_y) / 2
-        I135 = E135_x[:, 0, :, :] ** 2 + E135_x[:, 1, :, :] ** 2 + E135_y[:, 0, :, :] ** 2 + E135_y[:, 1, :, :] ** 2
+        I90 = tf.abs(E90)**2 / 2.0
+        E45_x = (rcp_x - rcp_y + lcp_x - lcp_y) / 2.0
+        E45_y = (-rcp_x + rcp_y - lcp_x + lcp_y) / 2.0
+        I45 = tf.abs(E45_x)**2/2 + tf.abs(E45_y)**2 / 2.0
+        E135_x = (rcp_x + rcp_y + lcp_x + lcp_y) / 2.0
+        E135_y = (rcp_x + rcp_y + lcp_x + lcp_y) / 2.0
+        I135 = tf.abs(E135_x)**2/2 + tf.abs(E135_y)**2 / 2.0
 
         S1 = I0 - I90
         S2 = I45 - I135
 
-        theta = tf.atan((S2 / S1)) / 2
+        # theta = tf.where(S1**2 > self.eps, tf.atan(S2*S1 / S1**2) / 2.0, tf.atan(S2*S1 / self.eps) / 2.0,)
+        theta = tf.atan(S2*S1 / (S1**2 + self.eps)) / 2.0
 
         if self.normalization == 'minmax':
             minimum = tf.reduce_min(theta)
@@ -356,46 +500,152 @@ class Polarizer(tf.keras.layers.Layer):
     def __init__(self, output_dim, phi=0.0, trainable=False):
         super(Polarizer, self).__init__()
         self.output_dim = output_dim
-        self.phi = self.add_weight(shape=(), initializer=tf.initializers.Constant(value=phi))
+        self.phi = tf.Variable(phi, name="phi", trainable=trainable)
         self.trainable = trainable
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "phi":  self.phi.numpy(),
+            "trainable": self.trainable
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
     def call(self, x):
-        x_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 0:2, :, :])(x)
-        y_rcp = tf.keras.layers.Lambda(lambda x: x[:, 0, 2:4, :, :])(x)
-        x_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 0:2, :, :])(x)
-        y_lcp = tf.keras.layers.Lambda(lambda x: x[:, 1, 2:4, :, :])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
 
-        rcp_x = tf.cos(self.phi) ** 2 * x_rcp + tf.sin(2 * self.phi) / 2 * y_rcp
-        rcp_y = tf.sin(2 * self.phi) / 2 * x_rcp + tf.sin(self.phi) ** 2 * y_rcp
+        p00 = tf.complex(tf.cos(-self.phi)**2.0, 0.0)
+        p01 = tf.complex(tf.sin(-2.0 * self.phi) / 2.0, 0.0)
+        p10 = p01
+        p11 = tf.complex(tf.sin(-self.phi)**2.0, 0.0)
 
-        lcp_x = tf.cos(self.phi) ** 2 * x_lcp + tf.sin(2 * self.phi) / 2 * y_lcp
-        lcp_y = tf.sin(2 * self.phi) / 2 * x_lcp + tf.sin(self.phi) ** 2 * y_lcp
+        rcp_x_pol = p00 * rcp_x + p01 * rcp_y
+        rcp_y_pol = p10 * rcp_x + p11 * rcp_y
 
-        rcp = tf.concat([rcp_x, rcp_y], axis=1)
-        lcp = tf.concat([lcp_x, lcp_y], axis=1)
+        lcp_x_pol = p00 * lcp_x + p01 * lcp_y
+        lcp_y_pol = p10 * lcp_x + p11 * lcp_y
 
-        cmpx = tf.stack([rcp, lcp], axis=1)
+        rcp = tf.stack([rcp_x_pol, rcp_y_pol], axis=1)
+        lcp = tf.stack([lcp_x_pol, lcp_y_pol], axis=1)
 
-        return cmpx
+        rl = tf.stack([rcp, lcp], axis=1)
+
+        return rl
 
 
-class AngularSpectrum(tf.keras.layers.Layer):
-    def __init__(self,output_dim, k, z=0, d=1e-6):
-        super(AngularSpectrum, self).__init__()
+class Dielectric(tf.keras.layers.Layer):
+    def __init__(self, tensor):
+        super(Dielectric, self).__init__()
+        self.tensor = tf.complex(tensor, 0.0 * tensor)
+
+    def call(self, x):
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        
+
+class GGG(AngularSpectrum):
+    def __init__(self, output_dim, wavelength, z=0.0, d=1.0e-6, normalization=None, method=None):
+        super(GGG, self).__init__(output_dim, wavelength, z=z, d=d, n=2.0, normalization=normalization, method=method)
+
+
+class Argument(tf.keras.layers.Layer):
+    def __init__(self, output_dim):
+        super(Argument, self).__init__()
         self.output_dim = output_dim
-        self.k = k
-        self.z = z
-        self.d = d
 
-    def build(self, input_dim):
-        self.input_dim = input_dim
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
+    @tf.function
+    def calc_argument(self, cmpx):
+        real = tf.math.real(cmpx)
+        imag = tf.math.imag(cmpx)
+
+        arg = tf.where(tf.not_equal(imag, 0.0), 2.0*tf.atan((tf.sqrt(real**2 + imag**2)-real)/imag), 0.0)
+        arg = tf.where((real > 0.0) & (tf.equal(imag, 0.0)), 0.0, arg)
+        arg = tf.where((real < 0.0) & tf.equal(imag, 0.0), np.pi, arg)
+        arg = tf.where(tf.equal(real, 0.0) & tf.equal(imag, 0.0), 0.0, arg)
+
+        return arg
 
     def call(self, x):
-        x_rcp = tf.complex(x[:,0,0,:,:], x[:,0,1,:,:])
-        x_rxp_fft = tf.signal.fft2d(x_rcp)
+        rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
 
-        return x_rxp_fft
+        rcp_arg = self.calc_argument(rcp_x)
+        lcp_arg = self.calc_argument(lcp_x)
+
+        delta_phi = (rcp_arg - lcp_arg)/2.0
+
+        return delta_phi
 
 
-if __name__ == '__main__':
-    pass
+class PhaseToPeriodic(tf.keras.layers.Layer):
+    def __init__(self, output_dim):
+        super(PhaseToPeriodic, self).__init__()
+        self.output_dim = output_dim
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
+    def call(self, x):
+        return tf.sin(x)
+
+
+class Softmax(tf.keras.layers.Layer):
+    def __init__(self, eps=0.0):
+        super(Softmax, self).__init__()
+        self.eps = tf.Variable(eps, trainable=False, name="epsilon")
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "eps": self.eps.numpy()
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
+    def call(self, x):
+        minimum = tf.reduce_min(x, axis=-1, keepdims=True)
+        return tf.nn.softmax(x - minimum, axis=-1)
+
+
+class MinMaxNormalization(tf.keras.layers.Layer):
+    def __init__(self):
+        super(MinMaxNormalization, self).__init__()
+
+    def call(self, x):
+        maximum = tf.reduce_max(x)
+        minimum = tf.reduce_min(x)
+        return tf.nn.softmax(x, axis=-1) + self.eps
