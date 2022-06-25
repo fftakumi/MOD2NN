@@ -4,7 +4,7 @@ import math
 
 
 class AngularSpectrum(tf.keras.layers.Layer):
-    def __init__(self,output_dim, wavelength=633e-9, z=0.0, d=1.0e-6, n=1.0, normalization=None, method=None):
+    def __init__(self, output_dim, wavelength=633e-9, z=0.0, d=1.0e-6, n=1.0, normalization=None, method=None):
         super(AngularSpectrum, self).__init__()
         self.output_dim = output_dim
         # self.wavelength = wavelength / n
@@ -52,16 +52,16 @@ class AngularSpectrum(tf.keras.layers.Layer):
         u = np.fft.fftfreq(width, d=self.d)
         v = np.fft.fftfreq(height, d=self.d)
         UU, VV = np.meshgrid(u, v)
-        w = np.where(UU ** 2 + VV ** 2 <= 1 / self.wavelength ** 2, tf.sqrt(1 / self.wavelength**2 - UU**2 - VV**2), 0).astype('float64')
+        w = np.where(UU ** 2 + VV ** 2 <= 1 / self.wavelength ** 2, tf.sqrt(1 / self.wavelength ** 2 - UU ** 2 - VV ** 2), 0).astype('float64')
         h = np.exp(1.0j * 2 * np.pi * w * self.z)
 
         if self.method == 'band_limited':
-            du = 1/(2*width * self.d)
-            dv = 1/(2*height * self.d)
-            u_limit = 1/(np.sqrt((2 * du * self.z)**2 + 1)) / self.wavelength
-            v_limit = 1/(np.sqrt((2 * dv * self.z)**2 + 1)) / self.wavelength
-            u_filter = np.where(np.abs(UU)/(2*u_limit) <= 1/2, 1, 0)
-            v_filter = np.where(np.abs(VV)/(2*v_limit) <= 1/2, 1, 0)
+            du = 1 / (2 * width * self.d)
+            dv = 1 / (2 * height * self.d)
+            u_limit = 1 / (np.sqrt((2 * du * self.z) ** 2 + 1)) / self.wavelength
+            v_limit = 1 / (np.sqrt((2 * dv * self.z) ** 2 + 1)) / self.wavelength
+            u_filter = np.where(np.abs(UU) / (2 * u_limit) <= 1 / 2, 1, 0)
+            v_filter = np.where(np.abs(VV) / (2 * v_limit) <= 1 / 2, 1, 0)
             h = h * u_filter * v_filter
         elif self.method == 'expand':
             self.pad_upper = math.ceil(self.input_dim[-2] / 2)
@@ -89,15 +89,15 @@ class AngularSpectrum(tf.keras.layers.Layer):
 
     @tf.function
     def propagation(self, cximages):
-        if self.method=='band_limited':
+        if self.method == 'band_limited':
             images_fft = tf.signal.fft2d(cximages)
             return tf.signal.ifft2d(images_fft * self.res)
-        elif self.method=='expand':
-            padding = [[0,0],[self.pad_upper, self.pad_upper],[self.pad_left, self.pad_left]]
+        elif self.method == 'expand':
+            padding = [[0, 0], [self.pad_upper, self.pad_upper], [self.pad_left, self.pad_left]]
             images_pad = tf.pad(cximages, paddings=padding)
             images_pad_fft = tf.signal.fft2d(images_pad)
             u_images_pad = tf.signal.ifft2d(images_pad_fft * self.res)
-            u_images = tf.keras.layers.Lambda(lambda x:x[:, self.pad_upper:self.pad_upper + self.input_dim[-2], self.pad_left:self.pad_left + self.input_dim[-1]])(u_images_pad)
+            u_images = tf.keras.layers.Lambda(lambda x: x[:, self.pad_upper:self.pad_upper + self.input_dim[-2], self.pad_left:self.pad_left + self.input_dim[-1]])(u_images_pad)
             return u_images
         else:
             images_fft = tf.signal.fft2d(cximages)
@@ -105,10 +105,10 @@ class AngularSpectrum(tf.keras.layers.Layer):
 
     @tf.function
     def call(self, x):
-        rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
 
         u_rcp_x = self.propagation(rcp_x)
         u_rcp_y = self.propagation(rcp_y)
@@ -122,7 +122,7 @@ class AngularSpectrum(tf.keras.layers.Layer):
 
         if self.normalization == 'max':
             maximum = tf.reduce_max(tf.abs(rl))
-            rl = rl / tf.complex(maximum, 0.0*maximum)
+            rl = rl / tf.complex(maximum, 0.0 * maximum)
 
         return rl
 
@@ -133,8 +133,7 @@ class CxTest(tf.keras.layers.Layer):
         self.output_dim = output_dim
 
     def call(self, inputs, **kwargs):
-
-        return inputs**2
+        return inputs ** 2
 
 
 class ImageResizing(tf.keras.layers.Layer):
@@ -193,14 +192,13 @@ class IntensityToElectricField(tf.keras.layers.Layer):
 
     @tf.function
     def call(self, x):
-        rcp_x = tf.complex(tf.sqrt(x/2.0), 0.0*x)
-        rcp_y = 1.0j * tf.complex(tf.sqrt(x/2.0), 0.0*x)
-        lcp_x = tf.complex(tf.sqrt(x/2.0), 0.0*x)
-        lcp_y = -1.0j * tf.complex(tf.sqrt(x/2.0), 0.0*x)
+        rcp_x = tf.complex(tf.sqrt(x / 2.0), 0.0 * x)
+        rcp_y = 1.0j * tf.complex(tf.sqrt(x / 2.0), 0.0 * x)
+        lcp_x = tf.complex(tf.sqrt(x / 2.0), 0.0 * x)
+        lcp_y = -1.0j * tf.complex(tf.sqrt(x / 2.0), 0.0 * x)
         rcp = tf.stack([rcp_x, rcp_y], axis=1)
         lcp = tf.stack([lcp_x, lcp_y], axis=1)
         return tf.stack([rcp, lcp], axis=1)
-
 
 
 class ElectricFieldToIntensity(tf.keras.layers.Layer):
@@ -230,7 +228,7 @@ class ElectricFieldToIntensity(tf.keras.layers.Layer):
         tot_x = rcp_x + lcp_x
         tot_y = rcp_y + lcp_y
 
-        intensity = tf.abs(tot_x)**2 / 2.0 + tf.abs(tot_y)**2 / 2.0
+        intensity = tf.abs(tot_x) ** 2 / 2.0 + tf.abs(tot_y) ** 2 / 2.0
 
         if self.normalization == 'max':
             intensity = intensity / tf.reduce_max(intensity)
@@ -239,59 +237,63 @@ class ElectricFieldToIntensity(tf.keras.layers.Layer):
 
 
 class MO(tf.keras.layers.Layer):
-    def __init__(self, output_dim, limitation=None, theta_max=0.0, eta_max=0.0):
+    def __init__(self, output_dim, limitation=None, theta=0.0, eta=0.0):
         super(MO, self).__init__()
         self.output_dim = output_dim
 
         self.limitation = limitation if limitation is not None else "None"
-        self.theta_max = tf.Variable(theta_max, validate_shape=False, name="theta_max", trainable=False)
-        self.eta_max = tf.Variable(eta_max, validate_shape=False, name="eta_max", trainable=False)
+        self.theta = theta
+        self.eta = eta
+        self.alpha_max = tf.complex(tf.constant(np.abs((np.log(1 + eta) - np.log(1 - eta)))/2, dtype=tf.float32), 0.0)
         assert len(self.output_dim) == 2
-        assert self.theta_max.numpy() >= 0.0
-        assert self.eta_max.numpy() >= 0.0
+        assert -1.0 < self.eta < 1.0
 
     def build(self, input_dim):
         self.input_dim = input_dim
         self.mag = self.add_weight("magnetization",
-                                 shape=[int(input_dim[-2]),
-                                        int(input_dim[-1])])
+                                   shape=[int(input_dim[-2]),
+                                          int(input_dim[-1])])
         super(MO, self).build(input_dim)
 
     @tf.function
     def get_limited_theta(self):
         if self.limitation == 'tanh':
-            return self.theta_max * tf.tanh(self.mag)
+            return self.theta * tf.tanh(self.mag)
         elif self.limitation == 'sin':
-            return self.theta_max * tf.sin(self.mag)
+            return self.theta * tf.sin(self.mag)
         elif self.limitation == 'sigmoid':
-            return self.theta_max * tf.sigmoid(self.mag)
+            return self.theta * (2.0 * tf.sigmoid(self.mag) - 1.0)
         else:
-            return self.mag
+            return self.theta * self.mag
 
     @tf.function
-    def get_limited_eta(self):
+    def get_limited_alpha(self):
         if self.limitation == 'tanh':
-            return self.eta_max * tf.tanh(self.mag)
+            eta_lim = self.eta * tf.tanh(self.mag)
+            return -(tf.math.log(1.0+ eta_lim) - tf.math.log(1.0-eta_lim))/2
         elif self.limitation == 'sin':
-            return self.eta_max * tf.sin(self.mag)
+            eta_lim = self.eta * tf.sin(self.mag)
+            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim))/2
         elif self.limitation == 'sigmoid':
-            return self.eta_max * tf.sigmoid(self.mag)
+            eta_lim = self.eta * (2.0 * tf.sigmoid(self.mag) - 1.0)
+            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim))/2
         else:
-            return self.mag
+            eta_lim = self.eta * self.mag
+            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim))/2
 
     @tf.function
     def get_limited_complex_faraday(self):
         theta = self.get_limited_theta()
-        eta = self.get_limited_eta()
-        return tf.complex(theta, eta)
+        alpha = self.get_limited_alpha()
+        return tf.complex(theta, alpha)
 
     def get_config(self):
         config = super().get_config()
         config.update({
             "output_dim": self.output_dim,
             "limitation": self.limitation,
-            "theta_max": self.theta_max.numpy(),
-            "eta_max": self.eta_max.numpy()
+            "theta": self.theta,
+            "eta": self.eta
         })
         return config
 
@@ -300,21 +302,20 @@ class MO(tf.keras.layers.Layer):
         return cls(**config)
 
     def call(self, x):
-        theta_lim = tf.complex(self.get_limited_theta(), 0.0)
-        eta_lim = tf.complex(self.get_limited_eta(), 0.0)
+        phi = self.get_limited_complex_faraday()
 
         rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
         rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
         lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
         lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
 
-        rcp_x = (1.0 + eta_lim) * rcp_x * tf.exp(1.0j * theta_lim)
-        rcp_y = (1.0 + eta_lim) * rcp_y * tf.exp(1.0j * theta_lim)
-        lcp_x = (1.0 - eta_lim) * lcp_x * tf.exp(-1.0j * theta_lim)
-        lcp_y = (1.0 - eta_lim) * lcp_y * tf.exp(-1.0j * theta_lim)
+        rcp_x_mo = rcp_x * tf.exp(-self.alpha_max) * tf.exp(1.0j * phi)
+        rcp_y_mo = rcp_y * tf.exp(-self.alpha_max) * tf.exp(1.0j * phi)
+        lcp_x_mo = lcp_x * tf.exp(-self.alpha_max) * tf.exp(-1.0j * phi)
+        lcp_y_mo = lcp_y * tf.exp(-self.alpha_max) * tf.exp(-1.0j * phi)
 
-        rcp = tf.stack([rcp_x, rcp_y], axis=1)
-        lcp = tf.stack([lcp_x, lcp_y], axis=1)
+        rcp = tf.stack([rcp_x_mo, rcp_y_mo], axis=1)
+        lcp = tf.stack([lcp_x_mo, lcp_y_mo], axis=1)
         return tf.stack([rcp, lcp], axis=1)
 
 
@@ -391,7 +392,7 @@ class MNISTDetector(tf.keras.layers.Layer):
         if self.normalization == 'minmax':
             maximum = tf.reduce_max(y)
             minimum = tf.reduce_min(y)
-            y = (y - minimum)/(maximum - minimum)
+            y = (y - minimum) / (maximum - minimum)
 
         if self.activation == 'softmax':
             y = tf.nn.softmax(y)
@@ -452,7 +453,7 @@ class FaradayRotation(tf.keras.layers.Layer):
         config = super().get_config()
         config.update({
             "output_dim": self.output_dim,
-            "normalization":  self.normalization,
+            "normalization": self.normalization,
             "activation": self.activation,
             "eps": self.eps
         })
@@ -463,27 +464,27 @@ class FaradayRotation(tf.keras.layers.Layer):
         return cls(**config)
 
     def call(self, x, **kwargs):
-        rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
 
         E0 = rcp_x + lcp_x
-        I0 = tf.abs(E0)**2 / 2.0
+        I0 = tf.abs(E0) ** 2 / 2.0
         E90 = rcp_y + lcp_y
-        I90 = tf.abs(E90)**2 / 2.0
+        I90 = tf.abs(E90) ** 2 / 2.0
         E45_x = (rcp_x - rcp_y + lcp_x - lcp_y) / 2.0
         E45_y = (-rcp_x + rcp_y - lcp_x + lcp_y) / 2.0
-        I45 = tf.abs(E45_x)**2/2 + tf.abs(E45_y)**2 / 2.0
+        I45 = tf.abs(E45_x) ** 2 / 2 + tf.abs(E45_y) ** 2 / 2.0
         E135_x = (rcp_x + rcp_y + lcp_x + lcp_y) / 2.0
         E135_y = (rcp_x + rcp_y + lcp_x + lcp_y) / 2.0
-        I135 = tf.abs(E135_x)**2/2 + tf.abs(E135_y)**2 / 2.0
+        I135 = tf.abs(E135_x) ** 2 / 2 + tf.abs(E135_y) ** 2 / 2.0
 
         S1 = I0 - I90
         S2 = I45 - I135
 
         # theta = tf.where(S1**2 > self.eps, tf.atan(S2*S1 / S1**2) / 2.0, tf.atan(S2*S1 / self.eps) / 2.0,)
-        theta = tf.atan(S2*S1 / (S1**2 + self.eps)) / 2.0
+        theta = tf.atan(S2 * S1 / (S1 ** 2 + self.eps)) / 2.0
 
         if self.normalization == 'minmax':
             minimum = tf.reduce_min(theta)
@@ -507,7 +508,7 @@ class Polarizer(tf.keras.layers.Layer):
         config = super().get_config()
         config.update({
             "output_dim": self.output_dim,
-            "phi":  self.phi.numpy(),
+            "phi": self.phi.numpy(),
             "trainable": self.trainable
         })
         return config
@@ -517,15 +518,15 @@ class Polarizer(tf.keras.layers.Layer):
         return cls(**config)
 
     def call(self, x):
-        rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
 
-        p00 = tf.complex(tf.cos(-self.phi)**2.0, 0.0)
+        p00 = tf.complex(tf.cos(-self.phi) ** 2.0, 0.0)
         p01 = tf.complex(tf.sin(-2.0 * self.phi) / 2.0, 0.0)
         p10 = p01
-        p11 = tf.complex(tf.sin(-self.phi)**2.0, 0.0)
+        p11 = tf.complex(tf.sin(-self.phi) ** 2.0, 0.0)
 
         rcp_x_pol = p00 * rcp_x + p01 * rcp_y
         rcp_y_pol = p10 * rcp_x + p11 * rcp_y
@@ -551,7 +552,7 @@ class Dielectric(tf.keras.layers.Layer):
         rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
         lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
         lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
-        
+
 
 class GGG(AngularSpectrum):
     def __init__(self, output_dim, wavelength, z=0.0, d=1.0e-6, normalization=None, method=None):
@@ -579,7 +580,7 @@ class Argument(tf.keras.layers.Layer):
         real = tf.math.real(cmpx)
         imag = tf.math.imag(cmpx)
 
-        arg = tf.where(tf.not_equal(imag, 0.0), 2.0*tf.atan((tf.sqrt(real**2 + imag**2)-real)/imag), 0.0)
+        arg = tf.where(tf.not_equal(imag, 0.0), 2.0 * tf.atan((tf.sqrt(real ** 2 + imag ** 2) - real) / imag), 0.0)
         arg = tf.where((real > 0.0) & (tf.equal(imag, 0.0)), 0.0, arg)
         arg = tf.where((real < 0.0) & tf.equal(imag, 0.0), np.pi, arg)
         arg = tf.where(tf.equal(real, 0.0) & tf.equal(imag, 0.0), 0.0, arg)
@@ -587,15 +588,15 @@ class Argument(tf.keras.layers.Layer):
         return arg
 
     def call(self, x):
-        rcp_x = tf.keras.layers.Lambda(lambda x:x[:,0,0,:,:])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x:x[:,0,1,:,:])(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x:x[:,1,0,:,:])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x:x[:,1,1,:,:])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
+        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
+        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
 
         rcp_arg = self.calc_argument(rcp_x)
         lcp_arg = self.calc_argument(lcp_x)
 
-        delta_phi = (rcp_arg - lcp_arg)/2.0
+        delta_phi = (rcp_arg - lcp_arg) / 2.0
 
         return delta_phi
 
