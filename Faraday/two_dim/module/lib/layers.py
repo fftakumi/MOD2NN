@@ -285,7 +285,7 @@ class MO(tf.keras.layers.Layer):
     def get_limited_complex_faraday(self):
         theta = self.get_limited_theta()
         alpha = self.get_limited_alpha()
-        return tf.complex(theta, alpha)
+        return tf.complex(theta, -alpha)
 
     def get_config(self):
         config = super().get_config()
@@ -309,10 +309,10 @@ class MO(tf.keras.layers.Layer):
         lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
         lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
 
-        rcp_x_mo = rcp_x * tf.exp(-self.alpha_max) * tf.exp(1.0j * phi)
-        rcp_y_mo = rcp_y * tf.exp(-self.alpha_max) * tf.exp(1.0j * phi)
-        lcp_x_mo = lcp_x * tf.exp(-self.alpha_max) * tf.exp(-1.0j * phi)
-        lcp_y_mo = lcp_y * tf.exp(-self.alpha_max) * tf.exp(-1.0j * phi)
+        rcp_x_mo = rcp_x * tf.exp(-self.alpha_max) * tf.exp(-1.0j * phi)
+        rcp_y_mo = rcp_y * tf.exp(-self.alpha_max) * tf.exp(-1.0j * phi)
+        lcp_x_mo = lcp_x * tf.exp(-self.alpha_max) * tf.exp(1.0j * phi)
+        lcp_y_mo = lcp_y * tf.exp(-self.alpha_max) * tf.exp(1.0j * phi)
 
         rcp = tf.stack([rcp_x_mo, rcp_y_mo], axis=1)
         lcp = tf.stack([lcp_x_mo, lcp_y_mo], axis=1)
@@ -473,11 +473,11 @@ class FaradayRotation(tf.keras.layers.Layer):
         I0 = tf.abs(E0) ** 2 / 2.0
         E90 = rcp_y + lcp_y
         I90 = tf.abs(E90) ** 2 / 2.0
-        E45_x = (rcp_x - rcp_y + lcp_x - lcp_y) / 2.0
-        E45_y = (-rcp_x + rcp_y - lcp_x + lcp_y) / 2.0
+        E45_x = (rcp_x + rcp_y + lcp_x + lcp_y) / 2.0
+        E45_y = (rcp_x + rcp_y + lcp_x + lcp_y) / 2.0
         I45 = tf.abs(E45_x) ** 2 / 2 + tf.abs(E45_y) ** 2 / 2.0
-        E135_x = (rcp_x + rcp_y + lcp_x + lcp_y) / 2.0
-        E135_y = (rcp_x + rcp_y + lcp_x + lcp_y) / 2.0
+        E135_x = (rcp_x - rcp_y + lcp_x - lcp_y) / 2.0
+        E135_y = (-rcp_x + rcp_y - lcp_x + lcp_y) / 2.0
         I135 = tf.abs(E135_x) ** 2 / 2 + tf.abs(E135_y) ** 2 / 2.0
 
         S1 = I0 - I90
@@ -523,10 +523,10 @@ class Polarizer(tf.keras.layers.Layer):
         lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
         lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
 
-        p00 = tf.complex(tf.cos(-self.phi) ** 2.0, 0.0)
-        p01 = tf.complex(tf.sin(-2.0 * self.phi) / 2.0, 0.0)
+        p00 = tf.complex(tf.cos(self.phi) ** 2.0, 0.0)
+        p01 = tf.complex(tf.sin(2.0 * self.phi) / 2.0, 0.0)
         p10 = p01
-        p11 = tf.complex(tf.sin(-self.phi) ** 2.0, 0.0)
+        p11 = tf.complex(tf.sin(self.phi) ** 2.0, 0.0)
 
         rcp_x_pol = p00 * rcp_x + p01 * rcp_y
         rcp_y_pol = p10 * rcp_x + p11 * rcp_y
