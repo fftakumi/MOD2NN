@@ -237,7 +237,7 @@ class ElectricFieldToIntensity(tf.keras.layers.Layer):
 
 
 class MO(tf.keras.layers.Layer):
-    def __init__(self, output_dim, limitation=None, theta=0.0, eta=0.0, kernel_regularizer = None):
+    def __init__(self, output_dim, limitation=None, theta=0.0, eta=0.0, kernel_regularizer=None):
         super(MO, self).__init__()
         self.output_dim = output_dim
 
@@ -297,6 +297,10 @@ class MO(tf.keras.layers.Layer):
             "theta": self.theta,
             "eta": self.eta
         })
+        if self.kernel_regularizer:
+            config.update({
+                "reguralizer":self.kernel_regularizer.get_config()
+            })
         return config
 
     @classmethod
