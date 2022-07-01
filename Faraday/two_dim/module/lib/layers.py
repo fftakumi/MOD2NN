@@ -326,9 +326,10 @@ class MO(tf.keras.layers.Layer):
 
 
 class MNISTDetector(tf.keras.layers.Layer):
-    def __init__(self, output_dim, activation=None, normalization=None, **kwargs):
+    def __init__(self, output_dim, inverse=False, activation=None, normalization=None, **kwargs):
         super(MNISTDetector, self).__init__(**kwargs)
         self.output_dim = output_dim
+        self.inverse = inverse
         self.activation = activation
         self.normalization = normalization
 
@@ -336,6 +337,7 @@ class MNISTDetector(tf.keras.layers.Layer):
         config = super().get_config()
         config.update({
             "output_dim": self.output_dim,
+            "inverse": self.inverse,
             "activation": self.activation,
             "normalization": self.normalization
         })
@@ -390,7 +392,10 @@ class MNISTDetector(tf.keras.layers.Layer):
         w9[6 * height:7 * height, 7 * width:8 * width] = 1.0
         w9 = tf.constant(w9)
 
-        self.filter = tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
+        if self.inverse:
+            self.filter = tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
+        else:
+            self.filter = -1.0*tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
 
     def call(self, x, **kwargs):
         y = tf.tensordot(x, self.filter, axes=[[1, 2], [0, 1]])
@@ -448,11 +453,10 @@ class MNISTFilter(tf.keras.layers.Layer):
 
 
 class FaradayRotation(tf.keras.layers.Layer):
-    def __init__(self, output_dim, normalization=None, activation=None, eps=1.0e-20):
+    def __init__(self, output_dim, normalization=None, eps=1.0e-20):
         super(FaradayRotation, self).__init__()
         self.output_dim = output_dim
         self.normalization = normalization
-        self.activation = activation
         self.eps = eps
 
     def get_config(self):
@@ -460,7 +464,6 @@ class FaradayRotation(tf.keras.layers.Layer):
         config.update({
             "output_dim": self.output_dim,
             "normalization": self.normalization,
-            "activation": self.activation,
             "eps": self.eps
         })
         return config
@@ -493,12 +496,9 @@ class FaradayRotation(tf.keras.layers.Layer):
         theta = tf.atan(S2 * S1 / (S1 ** 2 + self.eps)) / 2.0
 
         if self.normalization == 'minmax':
-            minimum = tf.reduce_min(theta)
-            maximum = tf.reduce_max(theta)
+            minimum = tf.reduce_min(theta, axis=[1, 2], keepdims=True)
+            maximum = tf.reduce_max(theta, axis=[1, 2], keepdims=True)
             theta = (theta - minimum) / (maximum - minimum)
-
-        if self.activation == 'softmax':
-            theta = tf.nn.softmax(theta)
 
         return theta
 

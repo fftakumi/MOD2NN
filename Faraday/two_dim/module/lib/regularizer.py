@@ -21,7 +21,7 @@ class ShiftL2Regularizer(tf.keras.regularizers.Regularizer):
         self.shift = shift
 
     def __call__(self, x):
-        return self.l1 * tf.math.reduce_sum(np.abs((self.shift**2 - x**2)))
+        return self.l1 * tf.math.reduce_sum(tf.math.abs((self.shift**2 - x**2)))
 
     def get_config(self):
         return {'l2': float(self.l1), 'shift': float(self.shift)}
