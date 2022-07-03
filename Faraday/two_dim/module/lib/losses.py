@@ -55,6 +55,7 @@ class CategoricalCircleOnCircumferenceMSE(tf.keras.losses.Loss):
         return config
 
     def call(self, y_true, y_pred):
+        y_true = tf.cast(y_true, tf.int32)
         y_true_image = tf.gather(self.f_list, y_true, axis=0)
         mse = tf.reduce_mean(tf.square(y_true_image - y_pred), axis=[1, 2])
         return mse
