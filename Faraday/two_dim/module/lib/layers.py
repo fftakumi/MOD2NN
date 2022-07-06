@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import math
+import matplotlib.pyplot as plt
 
 
 class AngularSpectrum(tf.keras.layers.Layer):
@@ -52,14 +53,14 @@ class AngularSpectrum(tf.keras.layers.Layer):
         u = np.fft.fftfreq(width, d=self.d)
         v = np.fft.fftfreq(height, d=self.d)
         UU, VV = np.meshgrid(u, v)
-        w = np.where(UU ** 2 + VV ** 2 <= 1 / self.wavelength ** 2, tf.sqrt(1 / self.wavelength ** 2 - UU ** 2 - VV ** 2), 0).astype('float64')
+        w = np.where(UU ** 2 + VV ** 2 <= 1 / self.wavelength_eff ** 2, tf.sqrt(1 / self.wavelength_eff ** 2 - UU ** 2 - VV ** 2), 0).astype('float64')
         h = np.exp(1.0j * 2 * np.pi * w * self.z)
 
         if self.method == 'band_limited':
             du = 1 / (2 * width * self.d)
             dv = 1 / (2 * height * self.d)
-            u_limit = 1 / (np.sqrt((2 * du * self.z) ** 2 + 1)) / self.wavelength
-            v_limit = 1 / (np.sqrt((2 * dv * self.z) ** 2 + 1)) / self.wavelength
+            u_limit = 1 / (np.sqrt((2 * du * self.z) ** 2 + 1)) / self.wavelength_eff
+            v_limit = 1 / (np.sqrt((2 * dv * self.z) ** 2 + 1)) / self.wavelength_eff
             u_filter = np.where(np.abs(UU) / (2 * u_limit) <= 1 / 2, 1, 0)
             v_filter = np.where(np.abs(VV) / (2 * v_limit) <= 1 / 2, 1, 0)
             h = h * u_filter * v_filter
@@ -74,14 +75,14 @@ class AngularSpectrum(tf.keras.layers.Layer):
 
             du = 1 / (self.padded_width * self.d)
             dv = 1 / (self.padded_height * self.d)
-            u_limit = 1 / (np.sqrt((2 * du * self.z) ** 2 + 1)) / self.wavelength
-            v_limit = 1 / (np.sqrt((2 * dv * self.z) ** 2 + 1)) / self.wavelength
+            u_limit = 1 / (np.sqrt((2 * du * self.z) ** 2 + 1)) / self.wavelength_eff
+            v_limit = 1 / (np.sqrt((2 * dv * self.z) ** 2 + 1)) / self.wavelength_eff
             UU, VV = np.meshgrid(u, v)
 
             u_filter = np.where(np.abs(UU) <= u_limit, 1, 0)
             v_filter = np.where(np.abs(VV) <= v_limit, 1, 0)
 
-            w = np.where(UU ** 2 + VV ** 2 <= 1 / self.wavelength ** 2, tf.sqrt(1 / self.wavelength ** 2 - UU ** 2 - VV ** 2), 0).astype('float64')
+            w = np.where(UU ** 2 + VV ** 2 <= 1 / self.wavelength_eff ** 2, tf.sqrt(1 / self.wavelength_eff ** 2 - UU ** 2 - VV ** 2), 0).astype('float64')
             h = np.exp(1.0j * 2 * np.pi * w * self.z)
             h = h * u_filter * v_filter
 
@@ -244,7 +245,7 @@ class MO(tf.keras.layers.Layer):
         self.limitation = limitation if limitation is not None else "None"
         self.theta = theta
         self.eta = eta
-        self.alpha_max = tf.complex(tf.constant(np.abs((np.log(1 + eta) - np.log(1 - eta)))/2, dtype=tf.float32), 0.0)
+        self.alpha_max = tf.complex(tf.constant(np.abs((np.log(1 + eta) - np.log(1 - eta))) / 2, dtype=tf.float32), 0.0)
         self.kernel_regularizer = kernel_regularizer
         assert len(self.output_dim) == 2
         assert -1.0 < self.eta < 1.0
@@ -272,16 +273,16 @@ class MO(tf.keras.layers.Layer):
     def get_limited_alpha(self):
         if self.limitation == 'tanh':
             eta_lim = self.eta * tf.tanh(self.mag)
-            return -(tf.math.log(1.0+ eta_lim) - tf.math.log(1.0-eta_lim))/2
+            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim)) / 2
         elif self.limitation == 'sin':
             eta_lim = self.eta * tf.sin(self.mag)
-            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim))/2
+            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim)) / 2
         elif self.limitation == 'sigmoid':
             eta_lim = self.eta * (2.0 * tf.sigmoid(self.mag) - 1.0)
-            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim))/2
+            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim)) / 2
         else:
             eta_lim = self.eta * self.mag
-            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim))/2
+            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim)) / 2
 
     @tf.function
     def get_limited_complex_faraday(self):
@@ -299,7 +300,7 @@ class MO(tf.keras.layers.Layer):
         })
         if self.kernel_regularizer:
             config.update({
-                "reguralizer":self.kernel_regularizer.get_config()
+                "reguralizer": self.kernel_regularizer.get_config()
             })
         return config
 
@@ -395,9 +396,79 @@ class MNISTDetector(tf.keras.layers.Layer):
         if self.inverse:
             self.filter = tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
         else:
-            self.filter = -1.0*tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
+            self.filter = -1.0 * tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
 
     def call(self, x, **kwargs):
+        y = tf.tensordot(x, self.filter, axes=[[1, 2], [0, 1]])
+
+        if self.normalization == 'minmax':
+            maximum = tf.reduce_max(y)
+            minimum = tf.reduce_min(y)
+            y = (y - minimum) / (maximum - minimum)
+
+        if self.activation == 'softmax':
+            y = tf.nn.softmax(y)
+
+        return y
+
+
+class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
+    def __init__(self, output_dim, r1, r2, activation=None, normalization=None, name="categorical_round_mse", **kwargs):
+        super(CircleOnCircumferenceDetector, self).__init__(name=name, **kwargs)
+        assert len(output_dim) == 2
+        assert 0 < r1
+        assert 0 < output_dim
+        assert 0 < r2 < r1 * np.tan(2 * np.pi / (2 * output_dim))
+        assert 0 < r1 + r2 < np.max(output_dim) / 2
+        self.output_dim = output_dim
+        self.r1 = r1
+        self.r2 = r2
+        self.activation = activation
+        self.normalization = normalization
+
+    @staticmethod
+    def calc_filters(shape, r1, r2, class_num):
+        rads = np.linspace(0, 2 * np.pi, class_num, endpoint=False)
+        x = np.arange(shape[1])
+        y = np.arange(shape[0])
+        xx, yy = np.meshgrid(x, y)
+        xx = xx - np.mean(xx)
+        yy = yy - np.mean(yy)
+        f_list = []
+        for rad in rads:
+            p = r1 * np.cos(rad - np.pi / 2)
+            q = r1 * np.sin(rad - np.pi / 2)
+            f_list.append(np.where((xx - p) ** 2 + (yy - q) ** 2 <= r2 ** 2, 1, 0))
+        return tf.constant(np.array(f_list), dtype=tf.float32)
+
+    @staticmethod
+    def plot(shape, r1, r2, class_num, ax=None):
+        filters = CircleOnCircumferenceDetector.calc_filters(shape, r1, r2, class_num)
+        sum_image = tf.reduce_sum(filters, axis=0)
+        if ax:
+            ax.imshow(sum_image.numpy())
+        else:
+            fig = plt.figure()
+            _ax = fig.add_subplot()
+            _ax.imshow(sum_image.numpy())
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "r1": self.r1,
+            "r2": self.r2,
+            "activation": self.activation,
+            "normalization": self.normalization
+        })
+        return config
+
+    def build(self, input_dim):
+        self.input_dim = input_dim
+
+        self.filters = tf.constant(self.calc_filters(input_dim, self.r1, self.r2, self.output_dim), dtype=tf.float32)
+
+    def call(self, x):
         y = tf.tensordot(x, self.filter, axes=[[1, 2], [0, 1]])
 
         if self.normalization == 'minmax':
@@ -452,9 +523,9 @@ class MNISTFilter(tf.keras.layers.Layer):
         return tf.multiply(x, self.filter)
 
 
-class FaradayRotation(tf.keras.layers.Layer):
+class FaradayRotationByStokes(tf.keras.layers.Layer):
     def __init__(self, output_dim, normalization=None, eps=1.0e-20):
-        super(FaradayRotation, self).__init__()
+        super(FaradayRotationByStokes, self).__init__()
         self.output_dim = output_dim
         self.normalization = normalization
         self.eps = eps
@@ -565,9 +636,9 @@ class GGG(AngularSpectrum):
         super(GGG, self).__init__(output_dim, wavelength, z=z, d=d, n=2.0, normalization=normalization, method=method)
 
 
-class Argument(tf.keras.layers.Layer):
+class FaradayRotationByArgument(tf.keras.layers.Layer):
     def __init__(self, output_dim):
-        super(Argument, self).__init__()
+        super(FaradayRotationByArgument, self).__init__()
         self.output_dim = output_dim
 
     def get_config(self):
@@ -595,9 +666,9 @@ class Argument(tf.keras.layers.Layer):
 
     def call(self, x):
         rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
+        # rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
         lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        # lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
 
         rcp_arg = self.calc_argument(rcp_x)
         lcp_arg = self.calc_argument(lcp_x)
