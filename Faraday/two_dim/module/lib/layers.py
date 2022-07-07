@@ -180,23 +180,29 @@ class ImageBinarization(tf.keras.layers.Layer):
 
 
 class IntensityToElectricField(tf.keras.layers.Layer):
-    def __init__(self, output_dim):
+    def __init__(self, output_dim, ini_theta=0.0):
         super(IntensityToElectricField, self).__init__()
         self.output_dim = output_dim
+        self.ini_theta = ini_theta
 
     def get_config(self):
         config = super().get_config()
         config.update({
-            "output_dim": self.output_dim
+            "output_dim": self.output_dim,
+            "ini_theta": self.ini_theta
         })
         return config
 
+    def build(self, input_dim):
+        self.input_dim = input_dim
+        self.theta = tf.complex(self.ini_theta, 0.0)
+
     @tf.function
     def call(self, x):
-        rcp_x = tf.complex(tf.sqrt(x / 2.0), 0.0 * x)
-        rcp_y = 1.0j * tf.complex(tf.sqrt(x / 2.0), 0.0 * x)
-        lcp_x = tf.complex(tf.sqrt(x / 2.0), 0.0 * x)
-        lcp_y = -1.0j * tf.complex(tf.sqrt(x / 2.0), 0.0 * x)
+        rcp_x = tf.complex(tf.sqrt(x / 2.0), 0.0 * x) * tf.exp(-1.0j * self.theta)
+        rcp_y = 1.0j * tf.complex(tf.sqrt(x / 2.0), 0.0 * x) * tf.exp(-1.0j * self.theta)
+        lcp_x = tf.complex(tf.sqrt(x / 2.0), 0.0 * x) * tf.exp(1.0j * self.theta)
+        lcp_y = -1.0j * tf.complex(tf.sqrt(x / 2.0), 0.0 * x) * tf.exp(1.0j * self.theta)
         rcp = tf.stack([rcp_x, rcp_y], axis=1)
         lcp = tf.stack([lcp_x, lcp_y], axis=1)
         return tf.stack([rcp, lcp], axis=1)
