@@ -320,18 +320,22 @@ class MO(tf.keras.layers.Layer):
 
 
 class MNISTDetector(tf.keras.layers.Layer):
-    def __init__(self, output_dim, activation=None, normalization=None, **kwargs):
+    def __init__(self, output_dim, activation=None, normalization=None, width=None, height=None, **kwargs):
         super(MNISTDetector, self).__init__(**kwargs)
         self.output_dim = output_dim
         self.activation = activation
         self.normalization = normalization
+        self.width = width
+        self.height = height
 
     def get_config(self):
         config = super().get_config()
         config.update({
             "output_dim": self.output_dim,
             "activation": self.activation,
-            "normalization": self.normalization
+            "normalization": self.normalization,
+            "width": self.width,
+            "height": self.height
         })
         return config
 
@@ -341,8 +345,15 @@ class MNISTDetector(tf.keras.layers.Layer):
 
     def build(self, input_shape):
         self.input_dim = input_shape
-        width = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
-        height = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
+        if self.width is None:
+            width = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
+        else:
+            width = self.width
+
+        if self.height is None:
+            height = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
+        else:
+            height = self.height
 
         w0 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
         w0[2 * height:3 * height, width:2 * width] = 1.0

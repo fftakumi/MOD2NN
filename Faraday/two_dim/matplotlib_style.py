@@ -23,6 +23,7 @@ cmap8 = LinearSegmentedColormap.from_list('custom', colors8)
 cmap9 = LinearSegmentedColormap.from_list('custom', colors9)
 cmap10 = LinearSegmentedColormap.from_list('custom', ["#597EC2", "#5B2C17", "#C69CE7"])
 cmap11 = LinearSegmentedColormap.from_list('custom', ["#2A5772", "#4790BB", "#B0D7D5"])
+cmap12 = LinearSegmentedColormap.from_list('custom', ["#9c9eda", "#513c28"])
 
 
 def main():
