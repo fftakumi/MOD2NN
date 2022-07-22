@@ -16,10 +16,10 @@ class CategoricalCircleOnCircumferenceMSE(tf.keras.losses.Loss):
         self.r2 = r2
         self.class_num = class_num
 
-        self.f_list = tf.constant(self.calc_filters(shape, r1, r2, class_num), dtype=tf.float32)
+        self.f_list = tf.constant(self.make_filters(shape, r1, r2, class_num), dtype=tf.float32)
 
     @staticmethod
-    def calc_filters(shape, r1, r2, class_num):
+    def make_filters(shape, r1, r2, class_num):
         rads = np.linspace(0, 2 * np.pi, class_num, endpoint=False)
         x = np.arange(shape[1])
         y = np.arange(shape[0])
@@ -35,7 +35,7 @@ class CategoricalCircleOnCircumferenceMSE(tf.keras.losses.Loss):
 
     @staticmethod
     def plot(shape, r1, r2, class_num, ax=None):
-        filters = CategoricalCircleOnCircumferenceMSE.calc_filters(shape, r1, r2, class_num)
+        filters = CategoricalCircleOnCircumferenceMSE.make_filters(shape, r1, r2, class_num)
         sum_image = tf.reduce_sum(filters, axis=0)
         if ax:
             ax.imshow(sum_image.numpy())
@@ -74,10 +74,10 @@ class CategoricalRhombusOnCircumferenceMSE(tf.keras.losses.Loss):
         self.r2 = r2
         self.class_num = class_num
 
-        self.f_list = self.calc_filters(shape, r1, r2, class_num)
+        self.f_list = self.make_filters(shape, r1, r2, class_num)
 
     @staticmethod
-    def calc_filters(shape, r1, r2, class_num):
+    def make_filters(shape, r1, r2, class_num):
         rads = np.linspace(0, 2 * np.pi, class_num, endpoint=False)
         x = np.arange(shape[1])
         y = np.arange(shape[0])
@@ -93,7 +93,7 @@ class CategoricalRhombusOnCircumferenceMSE(tf.keras.losses.Loss):
 
     @staticmethod
     def plot(shape, r1, r2, class_num, ax=None):
-        filters = CategoricalRhombusOnCircumferenceMSE.calc_filters(shape, r1, r2, class_num)
+        filters = CategoricalRhombusOnCircumferenceMSE.make_filters(shape, r1, r2, class_num)
         sum_image = tf.reduce_sum(filters, axis=0)
         if ax:
             ax.imshow(sum_image.numpy())

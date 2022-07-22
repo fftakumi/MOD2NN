@@ -402,7 +402,7 @@ class MNISTDetector(tf.keras.layers.Layer):
         if self.inverse:
             self.filter = -tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
         else:
-            self.filter = 1.0 * tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
+            self.filter = tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
 
     def call(self, x, **kwargs):
         y = tf.tensordot(x, self.filter, axes=[[1, 2], [0, 1]])
