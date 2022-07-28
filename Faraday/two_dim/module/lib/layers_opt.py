@@ -106,20 +106,13 @@ class AngularSpectrum(tf.keras.layers.Layer):
 
     @tf.function
     def call(self, x):
-        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
 
         u_rcp_x = self.propagation(rcp_x)
-        u_rcp_y = self.propagation(rcp_y)
         u_lcp_x = self.propagation(lcp_x)
-        u_lcp_y = self.propagation(lcp_y)
 
-        rcp = tf.stack([u_rcp_x, u_rcp_y], axis=1)
-        lcp = tf.stack([u_lcp_x, u_lcp_y], axis=1)
-
-        rl = tf.stack([rcp, lcp], axis=1)
+        rl = tf.stack([u_rcp_x, u_lcp_x], axis=1)
 
         if self.normalization == 'max':
             maximum = tf.reduce_max(tf.abs(rl))
@@ -200,12 +193,8 @@ class IntensityToElectricField(tf.keras.layers.Layer):
     @tf.function
     def call(self, x):
         rcp_x = tf.complex(tf.sqrt(x / 2.0), 0.0 * x) * tf.exp(-1.0j * self.theta)
-        rcp_y = 1.0j * tf.complex(tf.sqrt(x / 2.0), 0.0 * x) * tf.exp(-1.0j * self.theta)
         lcp_x = tf.complex(tf.sqrt(x / 2.0), 0.0 * x) * tf.exp(1.0j * self.theta)
-        lcp_y = -1.0j * tf.complex(tf.sqrt(x / 2.0), 0.0 * x) * tf.exp(1.0j * self.theta)
-        rcp = tf.stack([rcp_x, rcp_y], axis=1)
-        lcp = tf.stack([lcp_x, lcp_y], axis=1)
-        return tf.stack([rcp, lcp], axis=1)
+        return tf.stack([rcp_x, lcp_x], axis=1)
 
 
 class ElectricFieldToIntensity(tf.keras.layers.Layer):
@@ -228,9 +217,9 @@ class ElectricFieldToIntensity(tf.keras.layers.Layer):
 
     def call(self, x):
         rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
+        rcp_y = 1.0j * rcp_x
         lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        lcp_y = -1.0j * lcp_x
 
         tot_x = rcp_x + lcp_x
         tot_y = rcp_y + lcp_y
@@ -317,19 +306,13 @@ class MO(tf.keras.layers.Layer):
     def call(self, x):
         phi = self.get_limited_complex_faraday()
 
-        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
 
         rcp_x_mo = rcp_x * tf.exp(-self.alpha_max) * tf.exp(-1.0j * phi)
-        rcp_y_mo = rcp_y * tf.exp(-self.alpha_max) * tf.exp(-1.0j * phi)
         lcp_x_mo = lcp_x * tf.exp(-self.alpha_max) * tf.exp(1.0j * phi)
-        lcp_y_mo = lcp_y * tf.exp(-self.alpha_max) * tf.exp(1.0j * phi)
 
-        rcp = tf.stack([rcp_x_mo, rcp_y_mo], axis=1)
-        lcp = tf.stack([lcp_x_mo, lcp_y_mo], axis=1)
-        return tf.stack([rcp, lcp], axis=1)
+        return tf.stack([rcp_x_mo, lcp_x_mo], axis=1)
 
 
 class MNISTDetector(tf.keras.layers.Layer):
@@ -550,10 +533,10 @@ class FaradayRotationByStokes(tf.keras.layers.Layer):
         return cls(**config)
 
     def call(self, x, **kwargs):
-        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
+        rcp_y = 1.0j * rcp_x
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
+        lcp_y = -1.0j * lcp_x
 
         E0 = rcp_x + lcp_x
         I0 = tf.abs(E0) ** 2 / 2.0
@@ -602,9 +585,9 @@ class Polarizer(tf.keras.layers.Layer):
 
     def call(self, x):
         rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
+        rcp_y = 1.0j * rcp_x
         lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        lcp_y = -1.0j * lcp_x
 
         p00 = tf.complex(tf.cos(self.phi) ** 2.0, 0.0)
         p01 = tf.complex(tf.sin(2.0 * self.phi) / 2.0, 0.0)
@@ -671,10 +654,8 @@ class FaradayRotationByArgument(tf.keras.layers.Layer):
         return arg
 
     def call(self, x):
-        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
-        # rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
-        # lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
 
         rcp_arg = self.calc_argument(rcp_x)
         lcp_arg = self.calc_argument(lcp_x)
@@ -733,155 +714,3 @@ class MinMaxNormalization(tf.keras.layers.Layer):
         maximum = tf.reduce_max(x)
         minimum = tf.reduce_min(x)
         return tf.nn.softmax(x, axis=-1) + self.eps
-
-
-class MNISTDifferentialDetector(tf.keras.layers.Layer):
-    def __init__(self, output_dim, inverse=False, activation=None, normalization=None, **kwargs):
-        super(MNISTDifferentialDetector, self).__init__(**kwargs)
-        self.output_dim = output_dim
-        self.inverse = inverse
-        self.activation = activation
-        self.normalization = normalization
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            "output_dim": self.output_dim,
-            "inverse": self.inverse,
-            "activation": self.activation,
-            "normalization": self.normalization
-        })
-        return config
-
-    @classmethod
-    def from_config(cls, config):
-        return cls(**config)
-
-    @staticmethod
-    def make_positive_filter(input_shape):
-        width = int(input_shape[-1] / 10)
-        height = min(int(input_shape[-2] / 2 / 5), width)
-        pad_width = int(np.round(width / 2))
-        pad_height = int(np.round((input_shape[-1] / 2 - height * 3) / 2))
-
-        w0 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w0[pad_height:pad_height + height, pad_width:pad_width + width] = 1.0
-        w0 = tf.constant(w0)
-
-        w1 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w1[pad_height:pad_height + height, pad_width + width * 2:pad_width + width * 3] = 1.0
-        w1 = tf.constant(w1)
-
-        w2 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w2[pad_height:pad_height + height, pad_width + width * 4:pad_width + width * 5] = 1.0
-        w2 = tf.constant(w2)
-
-        w3 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w3[pad_height:pad_height + height, pad_width + width * 6:pad_width + width * 7] = 1.0
-        w3 = tf.constant(w3)
-
-        w4 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w4[pad_height:pad_height + height, pad_width + width * 8:pad_width + width * 9] = 1.0
-        w4 = tf.constant(w4)
-
-        w5 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w5[pad_height + height * 2:pad_height + height * 3, pad_width:pad_width + width] = 1.0
-        w5 = tf.constant(w5)
-
-        w6 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w6[pad_height + height * 2:pad_height + height * 3, pad_width + width * 2:pad_width + width * 3] = 1.0
-        w6 = tf.constant(w6)
-
-        w7 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w7[pad_height + height * 2:pad_height + height * 3, pad_width + width * 4:pad_width + width * 5] = 1.0
-        w7 = tf.constant(w7)
-
-        w8 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w8[pad_height + height * 2:pad_height + height * 3, pad_width + width * 6:pad_width + width * 7] = 1.0
-        w8 = tf.constant(w8)
-
-        w9 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w9[pad_height + height * 2:pad_height + height * 3, pad_width + width * 8:pad_width + width * 9] = 1.0
-        w9 = tf.constant(w9)
-
-        return tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
-
-    @staticmethod
-    def make_negative_filter(input_shape):
-        width = int(input_shape[-1] / 10)
-        height = min(int(input_shape[-2] / 2 / 5), width)
-
-        margin_height = int(input_shape[-2] / 2)
-
-        pad_width = int(np.round(width / 2))
-        pad_height = int(np.round((input_shape[-1] / 2 - height * 3) / 2)) + margin_height
-
-        w0 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w0[pad_height:pad_height + height, pad_width:pad_width + width] = 1.0
-        w0 = tf.constant(w0)
-
-        w1 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w1[pad_height:pad_height + height, pad_width + width * 2:pad_width + width * 3] = 1.0
-        w1 = tf.constant(w1)
-
-        w2 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w2[pad_height:pad_height + height, pad_width + width * 4:pad_width + width * 5] = 1.0
-        w2 = tf.constant(w2)
-
-        w3 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w3[pad_height:pad_height + height, pad_width + width * 6:pad_width + width * 7] = 1.0
-        w3 = tf.constant(w3)
-
-        w4 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w4[pad_height:pad_height + height, pad_width + width * 8:pad_width + width * 9] = 1.0
-        w4 = tf.constant(w4)
-
-        w5 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w5[pad_height + height * 2:pad_height + height * 3, pad_width:pad_width + width] = 1.0
-        w5 = tf.constant(w5)
-
-        w6 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w6[pad_height + height * 2:pad_height + height * 3, pad_width + width * 2:pad_width + width * 3] = 1.0
-        w6 = tf.constant(w6)
-
-        w7 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w7[pad_height + height * 2:pad_height + height * 3, pad_width + width * 4:pad_width + width * 5] = 1.0
-        w7 = tf.constant(w7)
-
-        w8 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w8[pad_height + height * 2:pad_height + height * 3, pad_width + width * 6:pad_width + width * 7] = 1.0
-        w8 = tf.constant(w8)
-
-        w9 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
-        w9[pad_height + height * 2:pad_height + height * 3, pad_width + width * 8:pad_width + width * 9] = 1.0
-        w9 = tf.constant(w9)
-
-        return tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
-
-    @staticmethod
-    def plot(input_shape):
-        positive = MNISTDifferentialDetector.make_positive_filter(input_shape)
-        negative = MNISTDifferentialDetector.make_negative_filter(input_shape)
-        image = tf.reduce_sum(positive, axis=-1) + -1 * tf.reduce_sum(negative, axis=-1)
-        plt.imshow(image)
-
-    def build(self, input_shape):
-        self.input_dim = input_shape
-        self.positive_filter = self.make_positive_filter(input_shape)
-        self.negative_filter = self.make_negative_filter(input_shape)
-
-    def call(self, x, **kwargs):
-        y_positive = tf.tensordot(x, self.positive_filter, axes=[[1, 2], [0, 1]])
-        y_negative = tf.tensordot(x, self.negative_filter, axes=[[1, 2], [0, 1]])
-
-        y = y_positive - y_negative
-
-        if self.normalization == 'minmax':
-            maximum = tf.reduce_max(y)
-            minimum = tf.reduce_min(y)
-            y = (y - minimum) / (maximum - minimum)
-
-        if self.activation == 'softmax':
-            y = tf.nn.softmax(y)
-
-        return y
