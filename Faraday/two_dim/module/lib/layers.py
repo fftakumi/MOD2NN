@@ -3,9 +3,6 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 
-import losses
-
-
 class AngularSpectrum(tf.keras.layers.Layer):
     def __init__(self, output_dim, wavelength=633e-9, z=0.0, d=1.0e-6, n=1.0, normalization=None, method=None):
         super(AngularSpectrum, self).__init__()
@@ -449,7 +446,14 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
 
     @staticmethod
     def plot(shape, r1, r2, class_num, ax=None):
-        losses.CategoricalCircleOnCircumferenceMSE.plot(shape, r1, r2, class_num, ax)
+        filters = CircleOnCircumferenceDetector.make_filters(shape, r1, r2, class_num)
+        sum_image = tf.reduce_sum(filters, axis=0)
+        if ax:
+            ax.imshow(sum_image.numpy())
+        else:
+            fig = plt.figure()
+            _ax = fig.add_subplot()
+            _ax.imshow(sum_image.numpy())
 
     def get_config(self):
         config = super().get_config()
@@ -462,13 +466,12 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
         })
         return config
 
-    def build(self, input_dim):
-        self.input_dim = input_dim
-        assert 0 < self.r1 + self.r2 < np.min(self.input_dim) / 2
-        self.filters = losses.CategoricalCircleOnCircumferenceMSE.make_filters(self.input_dim, self.r1, self.r2, self.output_dim)
+    def build(self, input_shape):
+        self.input_dim = input_shape
+        self.filters = self.make_filters((self.input_dim[1], self.input_dim[2]), self.r1, self.r2, self.output_dim)
 
     def call(self, x):
-        y = tf.tensordot(x, self.filter, axes=[[1, 2], [1, 2]])
+        y = tf.tensordot(x, self.filters, axes=[[1, 2], [1, 2]])
 
         if self.normalization == 'minmax':
             maximum = tf.reduce_max(y)
