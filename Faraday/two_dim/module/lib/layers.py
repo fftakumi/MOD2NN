@@ -455,6 +455,9 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
             _ax = fig.add_subplot()
             _ax.imshow(sum_image.numpy())
 
+    def get_photo_mask(self):
+        return tf.reduce_sum(self.filters, axis=0)
+
     def get_config(self):
         config = super().get_config()
         config.update({
@@ -465,6 +468,7 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
             "normalization": self.normalization
         })
         return config
+
 
     def build(self, input_shape):
         self.input_dim = input_shape
