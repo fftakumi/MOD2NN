@@ -116,3 +116,4 @@ class CategoricalRhombusOnCircumferenceMSE(tf.keras.losses.Loss):
         y_true_image = tf.gather(self.f_list, y_true, axis=0)
         mse = tf.reduce_mean(tf.square(y_true_image - y_pred), axis=[1, 2])
         return mse
+
