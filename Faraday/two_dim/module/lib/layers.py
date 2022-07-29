@@ -424,9 +424,9 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
     def __init__(self, output_dim, r1, r2, activation=None, normalization=None, name="circle_on_circumference_detector", **kwargs):
         super(CircleOnCircumferenceDetector, self).__init__(name=name, **kwargs)
         assert 0 < r1
+        assert 0 < r2
         assert 0 < output_dim
-        assert 0 < r2 < r1 * np.tan(2 * np.pi / (2 * output_dim))
-        assert 0 < r1 + r2 < np.max(output_dim) / 2
+        assert 0 < self.r1 < self.r2 * np.tan(2 * np.pi / (2 * output_dim))
         self.output_dim = output_dim
         self.r1 = r1
         self.r2 = r2
@@ -465,7 +465,7 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
 
     def build(self, input_dim):
         self.input_dim = input_dim
-
+        assert 0 < self.r1 + self.r2 < np.min(self.input_dim) / 2
         self.filters = losses.CategoricalCircleOnCircumferenceMSE.make_filters(self.input_dim, self.r1, self.r2, self.output_dim)
 
     def call(self, x):
