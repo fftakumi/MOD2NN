@@ -406,7 +406,6 @@ class MNISTDetector(tf.keras.layers.Layer):
 class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
     def __init__(self, output_dim, r1, r2, activation=None, normalization=None, name="categorical_round_mse", **kwargs):
         super(CircleOnCircumferenceDetector, self).__init__(name=name, **kwargs)
-        assert len(output_dim) == 2
         assert 0 < r1
         assert 0 < output_dim
         assert 0 < r2 < r1 * np.tan(2 * np.pi / (2 * output_dim))
