@@ -435,6 +435,10 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
     def plot(shape, r1, r2, class_num, ax=None):
         losses.CategoricalCircleOnCircumferenceMSE.plot(shape, r1, r2, class_num, ax)
 
+    @tf.function
+    def get_photo_mask(self):
+        return tf.reduce_sum(self.filters, axis=0)
+
     def get_config(self):
         config = super().get_config()
         config.update({
@@ -708,3 +712,155 @@ class MinMaxNormalization(tf.keras.layers.Layer):
         maximum = tf.reduce_max(x)
         minimum = tf.reduce_min(x)
         return tf.nn.softmax(x, axis=-1) + self.eps
+
+
+class MNISTDifferentialDetector(tf.keras.layers.Layer):
+    def __init__(self, output_dim, inverse=False, activation=None, normalization=None, **kwargs):
+        super(MNISTDifferentialDetector, self).__init__(**kwargs)
+        self.output_dim = output_dim
+        self.inverse = inverse
+        self.activation = activation
+        self.normalization = normalization
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "inverse": self.inverse,
+            "activation": self.activation,
+            "normalization": self.normalization
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
+    @staticmethod
+    def make_positive_filter(input_shape):
+        width = int(input_shape[-1] / 10)
+        height = min(int(input_shape[-2] / 2 / 5), width)
+        pad_width = int(np.round(width / 2))
+        pad_height = int(np.round((input_shape[-1] / 2 - height * 3) / 2))
+
+        w0 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w0[pad_height:pad_height + height, pad_width:pad_width + width] = 1.0
+        w0 = tf.constant(w0)
+
+        w1 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w1[pad_height:pad_height + height, pad_width + width * 2:pad_width + width * 3] = 1.0
+        w1 = tf.constant(w1)
+
+        w2 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w2[pad_height:pad_height + height, pad_width + width * 4:pad_width + width * 5] = 1.0
+        w2 = tf.constant(w2)
+
+        w3 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w3[pad_height:pad_height + height, pad_width + width * 6:pad_width + width * 7] = 1.0
+        w3 = tf.constant(w3)
+
+        w4 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w4[pad_height:pad_height + height, pad_width + width * 8:pad_width + width * 9] = 1.0
+        w4 = tf.constant(w4)
+
+        w5 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w5[pad_height + height * 2:pad_height + height * 3, pad_width:pad_width + width] = 1.0
+        w5 = tf.constant(w5)
+
+        w6 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w6[pad_height + height * 2:pad_height + height * 3, pad_width + width * 2:pad_width + width * 3] = 1.0
+        w6 = tf.constant(w6)
+
+        w7 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w7[pad_height + height * 2:pad_height + height * 3, pad_width + width * 4:pad_width + width * 5] = 1.0
+        w7 = tf.constant(w7)
+
+        w8 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w8[pad_height + height * 2:pad_height + height * 3, pad_width + width * 6:pad_width + width * 7] = 1.0
+        w8 = tf.constant(w8)
+
+        w9 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w9[pad_height + height * 2:pad_height + height * 3, pad_width + width * 8:pad_width + width * 9] = 1.0
+        w9 = tf.constant(w9)
+
+        return tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
+
+    @staticmethod
+    def make_negative_filter(input_shape):
+        width = int(input_shape[-1] / 10)
+        height = min(int(input_shape[-2] / 2 / 5), width)
+
+        margin_height = int(input_shape[-2] / 2)
+
+        pad_width = int(np.round(width / 2))
+        pad_height = int(np.round((input_shape[-1] / 2 - height * 3) / 2)) + margin_height
+
+        w0 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w0[pad_height:pad_height + height, pad_width:pad_width + width] = 1.0
+        w0 = tf.constant(w0)
+
+        w1 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w1[pad_height:pad_height + height, pad_width + width * 2:pad_width + width * 3] = 1.0
+        w1 = tf.constant(w1)
+
+        w2 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w2[pad_height:pad_height + height, pad_width + width * 4:pad_width + width * 5] = 1.0
+        w2 = tf.constant(w2)
+
+        w3 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w3[pad_height:pad_height + height, pad_width + width * 6:pad_width + width * 7] = 1.0
+        w3 = tf.constant(w3)
+
+        w4 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w4[pad_height:pad_height + height, pad_width + width * 8:pad_width + width * 9] = 1.0
+        w4 = tf.constant(w4)
+
+        w5 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w5[pad_height + height * 2:pad_height + height * 3, pad_width:pad_width + width] = 1.0
+        w5 = tf.constant(w5)
+
+        w6 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w6[pad_height + height * 2:pad_height + height * 3, pad_width + width * 2:pad_width + width * 3] = 1.0
+        w6 = tf.constant(w6)
+
+        w7 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w7[pad_height + height * 2:pad_height + height * 3, pad_width + width * 4:pad_width + width * 5] = 1.0
+        w7 = tf.constant(w7)
+
+        w8 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w8[pad_height + height * 2:pad_height + height * 3, pad_width + width * 6:pad_width + width * 7] = 1.0
+        w8 = tf.constant(w8)
+
+        w9 = np.zeros((input_shape[-2], input_shape[-1]), dtype='float32')
+        w9[pad_height + height * 2:pad_height + height * 3, pad_width + width * 8:pad_width + width * 9] = 1.0
+        w9 = tf.constant(w9)
+
+        return tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
+
+    @staticmethod
+    def plot(input_shape):
+        positive = MNISTDifferentialDetector.make_positive_filter(input_shape)
+        negative = MNISTDifferentialDetector.make_negative_filter(input_shape)
+        image = tf.reduce_sum(positive, axis=-1) + -1 * tf.reduce_sum(negative, axis=-1)
+        plt.imshow(image)
+
+    def build(self, input_shape):
+        self.input_dim = input_shape
+        self.positive_filter = self.make_positive_filter(input_shape)
+        self.negative_filter = self.make_negative_filter(input_shape)
+
+    def call(self, x, **kwargs):
+        y_positive = tf.tensordot(x, self.positive_filter, axes=[[1, 2], [0, 1]])
+        y_negative = tf.tensordot(x, self.negative_filter, axes=[[1, 2], [0, 1]])
+
+        y = y_positive - y_negative
+
+        if self.normalization == 'minmax':
+            maximum = tf.reduce_max(y)
+            minimum = tf.reduce_min(y)
+            y = (y - minimum) / (maximum - minimum)
+
+        if self.activation == 'softmax':
+            y = tf.nn.softmax(y)
+
+        return y

@@ -3,6 +3,9 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 
+import losses
+
+
 class AngularSpectrum(tf.keras.layers.Layer):
     def __init__(self, output_dim, wavelength=633e-9, z=0.0, d=1.0e-6, n=1.0, normalization=None, method=None):
         super(AngularSpectrum, self).__init__()
@@ -105,20 +108,13 @@ class AngularSpectrum(tf.keras.layers.Layer):
 
     @tf.function
     def call(self, x):
-        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
 
         u_rcp_x = self.propagation(rcp_x)
-        u_rcp_y = self.propagation(rcp_y)
         u_lcp_x = self.propagation(lcp_x)
-        u_lcp_y = self.propagation(lcp_y)
 
-        rcp = tf.stack([u_rcp_x, u_rcp_y], axis=1)
-        lcp = tf.stack([u_lcp_x, u_lcp_y], axis=1)
-
-        rl = tf.stack([rcp, lcp], axis=1)
+        rl = tf.stack([u_rcp_x, u_lcp_x], axis=1)
 
         if self.normalization == 'max':
             maximum = tf.reduce_max(tf.abs(rl))
@@ -199,12 +195,8 @@ class IntensityToElectricField(tf.keras.layers.Layer):
     @tf.function
     def call(self, x):
         rcp_x = tf.complex(tf.sqrt(x / 2.0), 0.0 * x) * tf.exp(-1.0j * self.theta)
-        rcp_y = 1.0j * tf.complex(tf.sqrt(x / 2.0), 0.0 * x) * tf.exp(-1.0j * self.theta)
         lcp_x = tf.complex(tf.sqrt(x / 2.0), 0.0 * x) * tf.exp(1.0j * self.theta)
-        lcp_y = -1.0j * tf.complex(tf.sqrt(x / 2.0), 0.0 * x) * tf.exp(1.0j * self.theta)
-        rcp = tf.stack([rcp_x, rcp_y], axis=1)
-        lcp = tf.stack([lcp_x, lcp_y], axis=1)
-        return tf.stack([rcp, lcp], axis=1)
+        return tf.stack([rcp_x, lcp_x], axis=1)
 
 
 class ElectricFieldToIntensity(tf.keras.layers.Layer):
@@ -227,9 +219,9 @@ class ElectricFieldToIntensity(tf.keras.layers.Layer):
 
     def call(self, x):
         rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
+        rcp_y = 1.0j * rcp_x
         lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        lcp_y = -1.0j * lcp_x
 
         tot_x = rcp_x + lcp_x
         tot_y = rcp_y + lcp_y
@@ -316,19 +308,13 @@ class MO(tf.keras.layers.Layer):
     def call(self, x):
         phi = self.get_limited_complex_faraday()
 
-        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
 
         rcp_x_mo = rcp_x * tf.exp(-self.alpha_max) * tf.exp(-1.0j * phi)
-        rcp_y_mo = rcp_y * tf.exp(-self.alpha_max) * tf.exp(-1.0j * phi)
         lcp_x_mo = lcp_x * tf.exp(-self.alpha_max) * tf.exp(1.0j * phi)
-        lcp_y_mo = lcp_y * tf.exp(-self.alpha_max) * tf.exp(1.0j * phi)
 
-        rcp = tf.stack([rcp_x_mo, rcp_y_mo], axis=1)
-        lcp = tf.stack([lcp_x_mo, lcp_y_mo], axis=1)
-        return tf.stack([rcp, lcp], axis=1)
+        return tf.stack([rcp_x_mo, lcp_x_mo], axis=1)
 
 
 class MNISTDetector(tf.keras.layers.Layer):
@@ -421,8 +407,9 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
     def __init__(self, output_dim, r1, r2, activation=None, normalization=None, name="circle_on_circumference_detector", **kwargs):
         super(CircleOnCircumferenceDetector, self).__init__(name=name, **kwargs)
         assert 0 < r1
-        assert 0 < r2
         assert 0 < output_dim
+        assert 0 < r2 < r1 * np.tan(2 * np.pi / (2 * output_dim))
+        assert 0 < r1 + r2 < np.max(output_dim) / 2
         self.output_dim = output_dim
         self.r1 = r1
         self.r2 = r2
@@ -446,15 +433,9 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
 
     @staticmethod
     def plot(shape, r1, r2, class_num, ax=None):
-        filters = CircleOnCircumferenceDetector.make_filters(shape, r1, r2, class_num)
-        sum_image = tf.reduce_sum(filters, axis=0)
-        if ax:
-            ax.imshow(sum_image.numpy())
-        else:
-            fig = plt.figure()
-            _ax = fig.add_subplot()
-            _ax.imshow(sum_image.numpy())
+        losses.CategoricalCircleOnCircumferenceMSE.plot(shape, r1, r2, class_num, ax)
 
+    @tf.function
     def get_photo_mask(self):
         return tf.reduce_sum(self.filters, axis=0)
 
@@ -469,13 +450,13 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
         })
         return config
 
+    def build(self, input_dim):
+        self.input_dim = input_dim
 
-    def build(self, input_shape):
-        self.input_dim = input_shape
-        self.filters = self.make_filters((self.input_dim[1], self.input_dim[2]), self.r1, self.r2, self.output_dim)
+        self.filters = losses.CategoricalCircleOnCircumferenceMSE.make_filters(self.input_dim, self.r1, self.r2, self.output_dim)
 
     def call(self, x):
-        y = tf.tensordot(x, self.filters, axes=[[1, 2], [1, 2]])
+        y = tf.tensordot(x, self.filter, axes=[[1, 2], [1, 2]])
 
         if self.normalization == 'minmax':
             maximum = tf.reduce_max(y)
@@ -550,10 +531,10 @@ class FaradayRotationByStokes(tf.keras.layers.Layer):
         return cls(**config)
 
     def call(self, x, **kwargs):
-        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
+        rcp_y = 1.0j * rcp_x
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
+        lcp_y = -1.0j * lcp_x
 
         E0 = rcp_x + lcp_x
         I0 = tf.abs(E0) ** 2 / 2.0
@@ -602,9 +583,9 @@ class Polarizer(tf.keras.layers.Layer):
 
     def call(self, x):
         rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
-        rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
+        rcp_y = 1.0j * rcp_x
         lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
-        lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        lcp_y = -1.0j * lcp_x
 
         p00 = tf.complex(tf.cos(self.phi) ** 2.0, 0.0)
         p01 = tf.complex(tf.sin(2.0 * self.phi) / 2.0, 0.0)
@@ -671,10 +652,8 @@ class FaradayRotationByArgument(tf.keras.layers.Layer):
         return arg
 
     def call(self, x):
-        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
-        # rcp_y = tf.keras.layers.Lambda(lambda x: x[:, 0, 1, :, :])(x)
-        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
-        # lcp_y = tf.keras.layers.Lambda(lambda x: x[:, 1, 1, :, :])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
 
         rcp_arg = self.calc_argument(rcp_x)
         lcp_arg = self.calc_argument(lcp_x)
