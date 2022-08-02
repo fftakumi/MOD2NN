@@ -3,8 +3,6 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 
-import losses
-
 
 class AngularSpectrum(tf.keras.layers.Layer):
     def __init__(self, output_dim, wavelength=633e-9, z=0.0, d=1.0e-6, n=1.0, normalization=None, method=None):
@@ -407,9 +405,7 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
     def __init__(self, output_dim, r1, r2, activation=None, normalization=None, name="circle_on_circumference_detector", **kwargs):
         super(CircleOnCircumferenceDetector, self).__init__(name=name, **kwargs)
         assert 0 < r1
-        assert 0 < output_dim
-        assert 0 < r2 < r1 * np.tan(2 * np.pi / (2 * output_dim))
-        assert 0 < r1 + r2 < np.max(output_dim) / 2
+        assert 0 < r2
         self.output_dim = output_dim
         self.r1 = r1
         self.r2 = r2
@@ -433,7 +429,14 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
 
     @staticmethod
     def plot(shape, r1, r2, class_num, ax=None):
-        losses.CategoricalCircleOnCircumferenceMSE.plot(shape, r1, r2, class_num, ax)
+        filters = CircleOnCircumferenceDetector.make_filters(shape, r1, r2, class_num)
+        sum_image = tf.reduce_sum(filters, axis=0)
+        if ax:
+            ax.imshow(sum_image.numpy())
+        else:
+            fig = plt.figure()
+            _ax = fig.add_subplot()
+            _ax.imshow(sum_image.numpy())
 
     @tf.function
     def get_photo_mask(self):
@@ -453,10 +456,10 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
     def build(self, input_dim):
         self.input_dim = input_dim
 
-        self.filters = losses.CategoricalCircleOnCircumferenceMSE.make_filters(self.input_dim, self.r1, self.r2, self.output_dim)
+        self.filters = self.make_filters([self.input_dim[-2],self.input_dim[-1]], self.r1, self.r2, self.output_dim)
 
     def call(self, x):
-        y = tf.tensordot(x, self.filter, axes=[[1, 2], [1, 2]])
+        y = tf.tensordot(x, self.filters, axes=[[1, 2], [1, 2]])
 
         if self.normalization == 'minmax':
             maximum = tf.reduce_max(y)
