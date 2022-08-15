@@ -323,6 +323,10 @@ class MNISTDetector(tf.keras.layers.Layer):
         self.activation = activation
         self.normalization = normalization
 
+    @tf.function
+    def get_photo_mask(self):
+        return tf.reduce_sum(self.filter, axis=-1)
+
     def get_config(self):
         config = super().get_config()
         config.update({
@@ -456,7 +460,7 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
     def build(self, input_dim):
         self.input_dim = input_dim
 
-        self.filters = self.make_filters([self.input_dim[-2],self.input_dim[-1]], self.r1, self.r2, self.output_dim)
+        self.filters = self.make_filters([self.input_dim[-2], self.input_dim[-1]], self.r1, self.r2, self.output_dim)
 
     def call(self, x):
         y = tf.tensordot(x, self.filters, axes=[[1, 2], [1, 2]])

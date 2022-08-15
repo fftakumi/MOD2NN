@@ -3,6 +3,7 @@ import glob
 import re
 
 files = glob.glob("*")
+files.sort()
 notes = []
 for f in files:
     if re.match(r'.*ipynb', f):
