@@ -589,9 +589,9 @@ class Polarizer(tf.keras.layers.Layer):
         return cls(**config)
 
     def call(self, x):
-        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
         rcp_y = 1.0j * rcp_x
-        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
         lcp_y = -1.0j * lcp_x
 
         p00 = tf.complex(tf.cos(self.phi) ** 2.0, 0.0)
