@@ -216,9 +216,9 @@ class ElectricFieldToIntensity(tf.keras.layers.Layer):
         return cls(**config)
 
     def call(self, x):
-        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
         rcp_y = 1.0j * rcp_x
-        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
         lcp_y = -1.0j * lcp_x
 
         tot_x = rcp_x + lcp_x
@@ -594,23 +594,19 @@ class Polarizer(tf.keras.layers.Layer):
         lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
         lcp_y = -1.0j * lcp_x
 
-        p00 = tf.complex(tf.cos(self.phi) ** 2.0, 0.0)
-        p01 = tf.complex(tf.sin(2.0 * self.phi) / 2.0, 0.0)
-        p10 = p01
-        p11 = tf.complex(tf.sin(self.phi) ** 2.0, 0.0)
+        # Ercp = T@Ercp
 
-        rcp_x_pol = p00 * rcp_x + p01 * rcp_y
-        rcp_y_pol = p10 * rcp_x + p11 * rcp_y
+        # Tr00 = Tr[0,0]
+        tr00 = tf.complex(tf.cos(self.phi) ** 2, -tf.sin(2 * self.phi) / 2) / 2.0
+        tr01 = tf.complex(tf.sin(2 * self.phi) / 2, -tf.sin(self.phi) ** 2) / 2.0
 
-        lcp_x_pol = p00 * lcp_x + p01 * lcp_y
-        lcp_y_pol = p10 * lcp_x + p11 * lcp_y
+        tl00 = tf.complex(tf.cos(self.phi) ** 2, tf.sin(2 * self.phi) / 2) / 2.0
+        tl01 = tf.complex(tf.sin(2 * self.phi) / 2, tf.sin(self.phi) ** 2) / 2.0
 
-        rcp = tf.stack([rcp_x_pol, rcp_y_pol], axis=1)
-        lcp = tf.stack([lcp_x_pol, lcp_y_pol], axis=1)
+        rcp_x_pol = tr00 * (rcp_x + lcp_x) + tr01 * (rcp_y + lcp_y)
+        lcp_x_pol = tl00 * (rcp_x + lcp_x) + tl01 * (rcp_y + lcp_y)
 
-        rl = tf.stack([rcp, lcp], axis=1)
-
-        return rl
+        return tf.stack([rcp_x_pol, lcp_x_pol], axis=1)
 
 
 class Dielectric(tf.keras.layers.Layer):
