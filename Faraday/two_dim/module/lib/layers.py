@@ -579,7 +579,7 @@ class Polarizer(tf.keras.layers.Layer):
         config = super().get_config()
         config.update({
             "output_dim": self.output_dim,
-            "phi": self.phi.numpy(),
+            "phi": float(self.phi.numpy()),
             "trainable": self.trainable
         })
         return config
@@ -689,12 +689,12 @@ class PhaseToPeriodic(tf.keras.layers.Layer):
 class Softmax(tf.keras.layers.Layer):
     def __init__(self, eps=0.0):
         super(Softmax, self).__init__()
-        self.eps = tf.Variable(eps, trainable=False, name="epsilon")
+        self.eps = tf.constant(eps, name="epsilon")
 
     def get_config(self):
         config = super().get_config()
         config.update({
-            "eps": self.eps.numpy()
+            "eps": float(self.eps.numpy())
         })
         return config
 
