@@ -316,16 +316,155 @@ class MO(tf.keras.layers.Layer):
 
 
 class MNISTDetector(tf.keras.layers.Layer):
-    def __init__(self, output_dim, inverse=False, activation=None, normalization=None, **kwargs):
+    def __init__(self, output_dim, inverse=False, activation=None, normalization=None, mode="v2", width=None, height=None, pad_w=0, pad_h=0, **kwargs):
         super(MNISTDetector, self).__init__(**kwargs)
         self.output_dim = output_dim
         self.inverse = inverse
         self.activation = activation
         self.normalization = normalization
+        self.mode = mode
+        self.width = width
+        self.height = height
+        self.pad_w = pad_w
+        self.pad_h = pad_h
 
     @tf.function
     def get_photo_mask(self):
-        return tf.reduce_sum(self.filter, axis=-1)
+        return tf.reduce_sum(self.filters, axis=0)
+
+    @staticmethod
+    def make_filters_v2(shape, width=None, height=None, pad_w=0, pad_h=0):
+        # dw = detector width
+        # dh = detector height
+
+        clipped_shape = (shape[0] - pad_h * 2, shape[1] - pad_w * 2)
+        dw = width if width is not None else min(int(tf.floor(clipped_shape[1] / 9.0)), int(tf.floor(clipped_shape[0] / 7.0)))
+        dh = height if height is not None else min(int(tf.floor(clipped_shape[1] / 9.0)), int(tf.floor(clipped_shape[0] / 7.0)))
+
+        # 1行目
+        # tdh : height of detector's top
+        tdh = round(shape[0] / 2 - dh * 5 / 2)
+
+        # 2行目の1番目と2番目の間
+        left = round(pad_w + (clipped_shape[1] - dw * 4) * 3 / 10 + dw / 2.0)
+        w0 = np.zeros(shape, dtype='float32')
+        w0[tdh:tdh + dh, left: left + dw] = 1.0
+        w0 = tf.constant(w0)
+
+        left = round(pad_w + (clipped_shape[1] / 2.0 - dw / 2.0))
+        w1 = np.zeros(shape, dtype='float32')
+        w1[tdh:tdh + dh, left: left + dw] = 1.0
+        w1 = tf.constant(w1)
+
+        # 2行目の3番目と4番目の間
+        left = round(pad_w + (clipped_shape[1] - dw * 4) * 7 / 10 + dw * 5 / 2.0)
+        w2 = np.zeros(shape, dtype='float32')
+        w2[tdh:tdh + dh, left: left + dw] = 1.0
+        w2 = tf.constant(w2)
+
+        # 2行目
+        tdh = int(tf.floor((shape[0] - dh) / 2))
+
+        left = round(pad_w + (clipped_shape[1] - dw * 4) / 5)
+        w3 = np.zeros(shape, dtype='float32')
+        w3[tdh:tdh + dh, left: left + dw] = 1.0
+        w3 = tf.constant(w3)
+
+        left = round(pad_w + (clipped_shape[1] - dw * 4) / 5 * 2 + dw)
+        w4 = np.zeros(shape, dtype='float32')
+        w4[tdh:tdh + dh, left: left + dw] = 1.0
+        w4 = tf.constant(w4)
+        print(left)
+
+        left = round(pad_w + (clipped_shape[1] - dw * 4) / 5 * 3 + dw * 2)
+        w5 = np.zeros(shape, dtype='float32')
+        w5[tdh:tdh + dh, left: left + dw] = 1.0
+        w5 = tf.constant(w5)
+        print(left)
+
+        left = round(pad_w + (clipped_shape[1] - dw * 4) / 5 * 4 + dw * 3)
+        w6 = np.zeros(shape, dtype='float32')
+        w6[tdh:tdh + dh, left: left + dw] = 1.0
+        w6 = tf.constant(w6)
+
+        # 3行目
+        tdh = round(shape[0] / 2 + dh * 3 / 2)
+
+        # 2行目の1番目と2番目の間
+        left = round(pad_w + (clipped_shape[1] - dw * 4) * 3 / 10 + dw / 2.0)
+        w7 = np.zeros(shape, dtype='float32')
+        w7[tdh:tdh + dh, left: left + dw] = 1.0
+        w7 = tf.constant(w7)
+
+        left = round(pad_w + (clipped_shape[1] / 2.0 - dw / 2.0))
+        w8 = np.zeros(shape, dtype='float32')
+        w8[tdh:tdh + dh, left: left + dw] = 1.0
+        w8 = tf.constant(w8)
+
+        # 2行目の3番目と4番目の間
+        left = round(pad_w + (clipped_shape[1] - dw * 4) * 7 / 10 + dw * 5 / 2.0)
+        w9 = np.zeros(shape, dtype='float32')
+        w9[tdh:tdh + dh, left: left + dw] = 1.0
+        w9 = tf.constant(w9)
+
+        return tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=0)
+
+    @staticmethod
+    def make_filters_v1(shape):
+        width = min(int(tf.floor(shape[1] / 9.0)), int(tf.floor(shape[0] / 7.0)))
+        height = min(int(tf.floor(shape[1] / 9.0)), int(tf.floor(shape[0] / 7.0)))
+
+        w0 = np.zeros(shape, dtype='float32')
+        w0[2 * height:3 * height, width:2 * width] = 1.0
+        w0 = tf.constant(w0)
+
+        w1 = np.zeros(shape, dtype='float32')
+        w1[2 * height:3 * height, 4 * width:5 * width] = 1.0
+        w1 = tf.constant(w1)
+
+        w2 = np.zeros(shape, dtype='float32')
+        w2[2 * height:3 * height, 7 * width:8 * width] = 1.0
+        w2 = tf.constant(w2)
+
+        w3 = np.zeros(shape, dtype='float32')
+        w3[4 * height:5 * height, 1 * width:2 * width] = 1.0
+        w3 = tf.constant(w3)
+
+        w4 = np.zeros(shape, dtype='float32')
+        w4[4 * height:5 * height, 3 * width:4 * width] = 1.0
+        w4 = tf.constant(w4)
+
+        w5 = np.zeros(shape, dtype='float32')
+        w5[4 * height:5 * height, 5 * width:6 * width] = 1.0
+        w5 = tf.constant(w5)
+
+        w6 = np.zeros(shape, dtype='float32')
+        w6[4 * height:5 * height, 7 * width:8 * width] = 1.0
+        w6 = tf.constant(w6)
+
+        w7 = np.zeros(shape, dtype='float32')
+        w7[6 * height:7 * height, width:2 * width] = 1.0
+        w7 = tf.constant(w7)
+
+        w8 = np.zeros(shape, dtype='float32')
+        w8[6 * height:7 * height, 4 * width:5 * width] = 1.0
+        w8 = tf.constant(w8)
+
+        w9 = np.zeros(shape, dtype='float32')
+        w9[6 * height:7 * height, 7 * width:8 * width] = 1.0
+        w9 = tf.constant(w9)
+
+        return tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=0)
+
+    @staticmethod
+    def plot(shape, width=None, height=None, pad_w=0, pad_h=0, ax=None):
+        image = tf.reduce_sum(MNISTDetector.make_filters_v2(shape, width, height, pad_w, pad_h), axis=0)
+        if ax:
+            ax.imshow(image.numpy())
+        else:
+            fig = plt.figure()
+            _ax = fig.add_subplot()
+            _ax.imshow(image.numpy())
 
     def get_config(self):
         config = super().get_config()
@@ -333,7 +472,12 @@ class MNISTDetector(tf.keras.layers.Layer):
             "output_dim": self.output_dim,
             "inverse": self.inverse,
             "activation": self.activation,
-            "normalization": self.normalization
+            "normalization": self.normalization,
+            "mode": self.mode,
+            "width": self.width,
+            "height": self.height,
+            "pad_w": self.pad_w,
+            "pad_h": self.pad_h
         })
         return config
 
@@ -343,56 +487,20 @@ class MNISTDetector(tf.keras.layers.Layer):
 
     def build(self, input_shape):
         self.input_dim = input_shape
-        width = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
-        height = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
 
-        w0 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w0[2 * height:3 * height, width:2 * width] = 1.0
-        w0 = tf.constant(w0)
-
-        w1 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w1[2 * height:3 * height, 4 * width:5 * width] = 1.0
-        w1 = tf.constant(w1)
-
-        w2 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w2[2 * height:3 * height, 7 * width:8 * width] = 1.0
-        w2 = tf.constant(w2)
-
-        w3 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w3[4 * height:5 * height, 1 * width:2 * width] = 1.0
-        w3 = tf.constant(w3)
-
-        w4 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w4[4 * height:5 * height, 3 * width:4 * width] = 1.0
-        w4 = tf.constant(w4)
-
-        w5 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w5[4 * height:5 * height, 5 * width:6 * width] = 1.0
-        w5 = tf.constant(w5)
-
-        w6 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w6[4 * height:5 * height, 7 * width:8 * width] = 1.0
-        w6 = tf.constant(w6)
-
-        w7 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w7[6 * height:7 * height, width:2 * width] = 1.0
-        w7 = tf.constant(w7)
-
-        w8 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w8[6 * height:7 * height, 4 * width:5 * width] = 1.0
-        w8 = tf.constant(w8)
-
-        w9 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w9[6 * height:7 * height, 7 * width:8 * width] = 1.0
-        w9 = tf.constant(w9)
-
-        if self.inverse:
-            self.filter = -tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
+        if self.mode == "v2":
+            if self.inverse:
+                self.filters = -self.make_filters_v2([self.input_dim[-2], self.input_dim[-1]], self.width, self.height, self.pad_w, self.pad_h)
+            else:
+                self.filters = self.make_filters_v2([self.input_dim[-2], self.input_dim[-1]], self.width, self.height, self.pad_w, self.pad_h)
         else:
-            self.filter = tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
+            if self.inverse:
+                self.filters = -self.make_filters_v1([self.input_dim[-2], self.input_dim[-1]])
+            else:
+                self.filters = self.make_filters_v1([self.input_dim[-2], self.input_dim[-1]])
 
     def call(self, x, **kwargs):
-        y = tf.tensordot(x, self.filter, axes=[[1, 2], [0, 1]])
+        y = tf.tensordot(x, self.filters, axes=[[1, 2], [1, 2]])
 
         if self.normalization == 'minmax':
             maximum = tf.reduce_max(y)
@@ -403,7 +511,6 @@ class MNISTDetector(tf.keras.layers.Layer):
             y = tf.nn.softmax(y)
 
         return y
-
 
 class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
     def __init__(self, output_dim, r1, r2, activation=None, normalization=None, name="circle_on_circumference_detector", **kwargs):
