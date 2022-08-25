@@ -1,8 +1,9 @@
 import tensorflow as tf
 
 
-@tf.keras.utils.register_keras_serializable(package='Custom', name='shift_l1')
-class ShiftL1Regularizer(tf.keras.regularizers.Regularizer):
+@tf.keras.utils.register_keras_serializable(package='Custom', name='symmetric_shift_l1')
+class SymmetricShiftL1Regularizer(tf.keras.regularizers.Regularizer):
+    # 旧SfiftL1
     def __init__(self, l1=0., shift=0.):
         self.l1 = l1
         self.shift = shift
@@ -15,7 +16,7 @@ class ShiftL1Regularizer(tf.keras.regularizers.Regularizer):
 
 
 @tf.keras.utils.register_keras_serializable(package='Custom', name='shift_l2')
-class ShiftL2Regularizer(tf.keras.regularizers.Regularizer):
+class SymmetricShiftL2Regularizer(tf.keras.regularizers.Regularizer):
     def __init__(self, l2=0., shift=0.):
         self.l1 = l2
         self.shift = shift
