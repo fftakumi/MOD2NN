@@ -2,7 +2,7 @@ import os
 import glob
 import re
 
-files = glob.glob("*")
+files = glob.glob("**/*" ,recursive=True)
 files.sort()
 notes = []
 for f in files:
