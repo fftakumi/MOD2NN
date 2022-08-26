@@ -8,8 +8,8 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/konnitiha3/MOD2NN/blob/master/train_note/20220816.ipynb)
 ### 20220819
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/konnitiha3/MOD2NN/blob/master/train_note/20220819.ipynb)
-### 20220823
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/konnitiha3/MOD2NN/blob/master/train_note/20220823.ipynb)
+### 20220823/train
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/konnitiha3/MOD2NN/blob/master/train_note/20220823/train.ipynb)
 ### 20220824/20220824
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/konnitiha3/MOD2NN/blob/master/train_note/20220824/20220824.ipynb)
 ### 20220825

@@ -240,10 +240,11 @@ class MO(tf.keras.layers.Layer):
         self.limitation = limitation if limitation is not None else "None"
         self.theta = theta
         self.eta = eta
+        self.eta_max = tf.constant(tf.abs(self.eta))
         self.alpha_max = tf.complex(tf.constant(np.abs((np.log(1 + eta) - np.log(1 - eta))) / 2, dtype=tf.float32), 0.0)
         self.kernel_regularizer = kernel_regularizer
         assert len(self.output_dim) == 2
-        assert -1.0 < self.eta < 1.0
+        assert -1.0 <= self.eta <= 1.0
 
     def build(self, input_dim):
         self.input_dim = input_dim
@@ -256,28 +257,24 @@ class MO(tf.keras.layers.Layer):
     @tf.function
     def get_limited_theta(self):
         if self.limitation == 'tanh':
-            return self.theta * tf.tanh(self.mag)
+            return tf.complex(self.theta * tf.tanh(self.mag), tf.zeros_like(self.mag))
         elif self.limitation == 'sin':
-            return self.theta * tf.sin(self.mag)
+            return tf.complex(self.theta * tf.sin(self.mag), tf.zeros_like(self.mag))
         elif self.limitation == 'sigmoid':
-            return self.theta * (2.0 * tf.sigmoid(self.mag) - 1.0)
+            return tf.complex(self.theta * (2.0 * tf.sigmoid(self.mag) - 1.0), tf.zeros_like(self.mag))
         else:
-            return self.theta * self.mag
+            return tf.complex(self.theta * self.mag, tf.zeros_like(self.mag))
 
     @tf.function
-    def get_limited_alpha(self):
+    def get_limited_eta(self):
         if self.limitation == 'tanh':
-            eta_lim = self.eta * tf.tanh(self.mag)
-            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim)) / 2
+            return self.eta * tf.tanh(self.mag)
         elif self.limitation == 'sin':
-            eta_lim = self.eta * tf.sin(self.mag)
-            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim)) / 2
+            return tf.complex(self.eta * tf.sin(self.mag), tf.zeros_like(self.mag))
         elif self.limitation == 'sigmoid':
-            eta_lim = self.eta * (2.0 * tf.sigmoid(self.mag) - 1.0)
-            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim)) / 2
+            return tf.complex(self.eta * (2.0 * tf.sigmoid(self.mag) - 1.0), tf.zeros_like(self.mag))
         else:
-            eta_lim = self.eta * self.mag
-            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim)) / 2
+            return self.eta * self.mag
 
     @tf.function
     def get_limited_complex_faraday(self):
@@ -304,13 +301,14 @@ class MO(tf.keras.layers.Layer):
         return cls(**config)
 
     def call(self, x):
-        phi = self.get_limited_complex_faraday()
+        theta = self.get_limited_theta()
+        eta = self.get_limited_eta()
 
         rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
         lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
 
-        rcp_x_mo = rcp_x * tf.exp(-self.alpha_max) * tf.exp(-1.0j * phi)
-        lcp_x_mo = lcp_x * tf.exp(-self.alpha_max) * tf.exp(1.0j * phi)
+        rcp_x_mo = tf.complex((1.0 + eta)/(1.0 + self.eta_max), tf.zeros_like(self.mag)) * rcp_x * tf.exp(-1.0j * theta)
+        lcp_x_mo = tf.complex((1.0 - eta)/(1.0 + self.eta_max), tf.zeros_like(self.mag)) * lcp_x * tf.exp(1.0j * theta)
 
         return tf.stack([rcp_x_mo, lcp_x_mo], axis=1)
 
