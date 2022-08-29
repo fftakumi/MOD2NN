@@ -240,7 +240,7 @@ class MO(tf.keras.layers.Layer):
         self.limitation = limitation if limitation is not None else "None"
         self.theta = theta
         self.eta = eta
-        self.eta_max = abs(self.eta)
+        self.eta_max = abs(eta)
         self.alpha_max = tf.complex(tf.constant(np.abs((np.log(1 + eta) - np.log(1 - eta))) / 2, dtype=tf.float32), 0.0)
         self.kernel_regularizer = kernel_regularizer
         assert len(self.output_dim) == 2
@@ -270,9 +270,9 @@ class MO(tf.keras.layers.Layer):
         if self.limitation == 'tanh':
             return self.eta * tf.tanh(self.mag)
         elif self.limitation == 'sin':
-            return tf.complex(self.eta * tf.sin(self.mag), tf.zeros_like(self.mag))
+            return self.eta * tf.sin(self.mag)
         elif self.limitation == 'sigmoid':
-            return tf.complex(self.eta * (2.0 * tf.sigmoid(self.mag) - 1.0), tf.zeros_like(self.mag))
+            return self.eta * (2.0 * tf.sigmoid(self.mag) - 1.0)
         else:
             return self.eta * self.mag
 
@@ -311,7 +311,6 @@ class MO(tf.keras.layers.Layer):
         lcp_x_mo = tf.complex((1.0 - eta)/(1.0 + self.eta_max), tf.zeros_like(self.mag)) * lcp_x * tf.exp(1.0j * theta)
 
         return tf.stack([rcp_x_mo, lcp_x_mo], axis=1)
-
 
 class MNISTDetector(tf.keras.layers.Layer):
     def __init__(self, output_dim, inverse=False, activation=None, normalization=None, mode="v2", width=None, height=None, pad_w=0, pad_h=0, **kwargs):
