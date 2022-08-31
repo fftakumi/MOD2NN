@@ -33,6 +33,7 @@ def main():
     plt.rcParams['ytick.direction'] = 'in'
     plt.rcParams['axes.xmargin'] = 0.01
     plt.rcParams['axes.ymargin'] = 0.01
+    plt.rcParams["axes.grid"] = False
     plt.rcParams["legend.fancybox"] = False  # 丸角OFF
     plt.rcParams["legend.framealpha"] = 1  # 透明度の指定、0で塗りつぶしなし
     plt.rcParams["legend.edgecolor"] = 'black'  # edgeの色を変更
