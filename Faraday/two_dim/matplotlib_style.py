@@ -26,6 +26,7 @@ cmap11 = LinearSegmentedColormap.from_list('custom', ["#2A5772", "#4790BB", "#B0
 cmap12 = LinearSegmentedColormap.from_list('custom', ["#9c9eda", "#513c28"])
 
 
+
 def main():
     plt.rcParams['font.family'] = 'Times New Roman'
     plt.rcParams['font.size'] = 18  # 適当に必要なサイズに
