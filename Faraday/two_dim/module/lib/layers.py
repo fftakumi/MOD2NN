@@ -233,7 +233,7 @@ class ElectricFieldToIntensity(tf.keras.layers.Layer):
 
 
 class MO(tf.keras.layers.Layer):
-    def __init__(self, output_dim, limitation=None, theta=0.0, eta=0.0, kernel_regularizer=None):
+    def __init__(self, output_dim, limitation=None, theta=0.0, eta=0.0, kernel_regularizer=None, kernel_initializer=None):
         super(MO, self).__init__()
         self.output_dim = output_dim
 
@@ -243,6 +243,7 @@ class MO(tf.keras.layers.Layer):
         self.eta_max = abs(eta)
         self.alpha_max = tf.complex(tf.constant(np.abs((np.log(1 + eta) - np.log(1 - eta))) / 2, dtype=tf.float32), 0.0)
         self.kernel_regularizer = kernel_regularizer
+        self.kernel_initializer = kernel_initializer
         assert len(self.output_dim) == 2
         assert -1.0 <= self.eta <= 1.0
 
@@ -251,6 +252,7 @@ class MO(tf.keras.layers.Layer):
         self.mag = self.add_weight("magnetization",
                                    shape=[int(input_dim[-2]),
                                           int(input_dim[-1])],
+                                   initializer=self.kernel_initializer,
                                    regularizer=self.kernel_regularizer)
         super(MO, self).build(input_dim)
 
