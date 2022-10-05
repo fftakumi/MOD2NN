@@ -348,17 +348,20 @@ class MNISTDetector(tf.keras.layers.Layer):
         left = round(pad_w + (clipped_shape[1] - dw * 4) * 3 / 10 + dw / 2.0)
         w0 = np.zeros(shape, dtype='float32')
         w0[tdh:tdh + dh, left: left + dw] = 1.0
+        w0 = w0 / np.sum(w0)
         w0 = tf.constant(w0)
 
         left = round(pad_w + (clipped_shape[1] / 2.0 - dw / 2.0))
         w1 = np.zeros(shape, dtype='float32')
         w1[tdh:tdh + dh, left: left + dw] = 1.0
+        w1 = w1 / np.sum(w1)
         w1 = tf.constant(w1)
 
         # 2行目の3番目と4番目の間
         left = round(pad_w + (clipped_shape[1] - dw * 4) * 7 / 10 + dw * 5 / 2.0)
         w2 = np.zeros(shape, dtype='float32')
         w2[tdh:tdh + dh, left: left + dw] = 1.0
+        w2 = w2 / np.sum(w2)
         w2 = tf.constant(w2)
 
         # 2行目
@@ -367,23 +370,25 @@ class MNISTDetector(tf.keras.layers.Layer):
         left = round(pad_w + (clipped_shape[1] - dw * 4) / 5)
         w3 = np.zeros(shape, dtype='float32')
         w3[tdh:tdh + dh, left: left + dw] = 1.0
+        w3 = w3 / np.sum(w3)
         w3 = tf.constant(w3)
 
         left = round(pad_w + (clipped_shape[1] - dw * 4) / 5 * 2 + dw)
         w4 = np.zeros(shape, dtype='float32')
         w4[tdh:tdh + dh, left: left + dw] = 1.0
+        w4 = w4 / np.sum(w4)
         w4 = tf.constant(w4)
-        print(left)
 
         left = round(pad_w + (clipped_shape[1] - dw * 4) / 5 * 3 + dw * 2)
         w5 = np.zeros(shape, dtype='float32')
         w5[tdh:tdh + dh, left: left + dw] = 1.0
+        w5 = w5 / np.sum(w5)
         w5 = tf.constant(w5)
-        print(left)
 
         left = round(pad_w + (clipped_shape[1] - dw * 4) / 5 * 4 + dw * 3)
         w6 = np.zeros(shape, dtype='float32')
         w6[tdh:tdh + dh, left: left + dw] = 1.0
+        w6 = w6 / np.sum(w6)
         w6 = tf.constant(w6)
 
         # 3行目
@@ -393,17 +398,20 @@ class MNISTDetector(tf.keras.layers.Layer):
         left = round(pad_w + (clipped_shape[1] - dw * 4) * 3 / 10 + dw / 2.0)
         w7 = np.zeros(shape, dtype='float32')
         w7[tdh:tdh + dh, left: left + dw] = 1.0
+        w7 = w7 / np.sum(w7)
         w7 = tf.constant(w7)
 
         left = round(pad_w + (clipped_shape[1] / 2.0 - dw / 2.0))
         w8 = np.zeros(shape, dtype='float32')
         w8[tdh:tdh + dh, left: left + dw] = 1.0
+        w8 = w8 / np.sum(w8)
         w8 = tf.constant(w8)
 
         # 2行目の3番目と4番目の間
         left = round(pad_w + (clipped_shape[1] - dw * 4) * 7 / 10 + dw * 5 / 2.0)
         w9 = np.zeros(shape, dtype='float32')
         w9[tdh:tdh + dh, left: left + dw] = 1.0
+        w9 = w9 / np.sum(w9)
         w9 = tf.constant(w9)
 
         return tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=0)
@@ -534,7 +542,8 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
         for rad in rads:
             p = r1 * np.cos(rad - np.pi / 2)
             q = r1 * np.sin(rad - np.pi / 2)
-            f_list.append(np.where((xx - p) ** 2 + (yy - q) ** 2 <= r2 ** 2, 1, 0))
+            _filter =  np.where((xx - p) ** 2 + (yy - q) ** 2 <= r2 ** 2, 1, 0)
+            f_list.append(_filter / np.sum(_filter))
         return tf.constant(np.array(f_list), dtype=tf.float32)
 
     @staticmethod
