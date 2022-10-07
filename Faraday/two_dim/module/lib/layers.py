@@ -115,8 +115,9 @@ class AngularSpectrum(tf.keras.layers.Layer):
         rl = tf.stack([u_rcp_x, u_lcp_x], axis=1)
 
         if self.normalization == 'max':
-            maximum = tf.reduce_max(tf.abs(rl))
-            rl = rl / tf.complex(maximum, 0.0 * maximum)
+            # max intensity = 1
+            maximum = tf.reduce_max(tf.abs(rl), axis=[-3, -2, -1], keepdims=True)
+            return rl / tf.complex(maximum * tf.sqrt(2.), 0.0 * maximum)
 
         return rl
 
@@ -227,7 +228,7 @@ class ElectricFieldToIntensity(tf.keras.layers.Layer):
         intensity = tf.abs(tot_x) ** 2 / 2.0 + tf.abs(tot_y) ** 2 / 2.0
 
         if self.normalization == 'max':
-            intensity = intensity / tf.reduce_max(intensity)
+            return intensity / tf.reduce_max(intensity)
 
         return intensity
 
@@ -241,11 +242,12 @@ class MO(tf.keras.layers.Layer):
         self.theta = theta
         self.eta = eta
         self.eta_max = abs(eta)
-        self.alpha_max = tf.complex(tf.constant(np.abs((np.log(1 + eta) - np.log(1 - eta))) / 2, dtype=tf.float32), 0.0)
+        self.alpha = tf.math.log((1. + self.eta) / (1. - self.eta)) / 2.
+        self.phi_common = tf.complex(0., 1. + self.eta_max)
         self.kernel_regularizer = kernel_regularizer
         self.kernel_initializer = kernel_initializer
         assert len(self.output_dim) == 2
-        assert -1.0 <= self.eta <= 1.0
+        assert -1.0 < self.eta < 1.0
 
     def build(self, input_dim):
         self.input_dim = input_dim
@@ -280,9 +282,9 @@ class MO(tf.keras.layers.Layer):
 
     @tf.function
     def get_limited_complex_faraday(self):
-        theta = self.get_limited_theta()
-        alpha = self.get_limited_alpha()
-        return tf.complex(theta, -alpha)
+        theta = self.theta * tf.sin(self.mag)
+        alpha = self.alpha * tf.sin(self.mag)
+        return tf.complex(theta, alpha)
 
     def get_config(self):
         config = super().get_config()
@@ -303,16 +305,16 @@ class MO(tf.keras.layers.Layer):
         return cls(**config)
 
     def call(self, x):
-        theta = self.get_limited_theta()
-        eta = self.get_limited_eta()
+        phi = self.get_limited_complex_faraday()
 
         rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
         lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
 
-        rcp_x_mo = tf.complex((1.0 + eta)/(1.0 + self.eta_max), tf.zeros_like(self.mag)) * rcp_x * tf.exp(-1.0j * theta)
-        lcp_x_mo = tf.complex((1.0 - eta)/(1.0 + self.eta_max), tf.zeros_like(self.mag)) * lcp_x * tf.exp(1.0j * theta)
+        rcp_x_mo = rcp_x * tf.exp(-1.j * phi) * tf.exp(1.j * self.phi_common)
+        lcp_x_mo = lcp_x * tf.exp(1.j * phi) * tf.exp(1.j * self.phi_common)
 
         return tf.stack([rcp_x_mo, lcp_x_mo], axis=1)
+
 
 class MNISTDetector(tf.keras.layers.Layer):
     def __init__(self, output_dim, inverse=False, activation=None, normalization=None, mode="v2", width=None, height=None, pad_w=0, pad_h=0, **kwargs):
@@ -348,20 +350,20 @@ class MNISTDetector(tf.keras.layers.Layer):
         left = round(pad_w + (clipped_shape[1] - dw * 4) * 3 / 10 + dw / 2.0)
         w0 = np.zeros(shape, dtype='float32')
         w0[tdh:tdh + dh, left: left + dw] = 1.0
-        #w0 = w0 / np.sum(w0)
+        # w0 = w0 / np.sum(w0)
         w0 = tf.constant(w0)
 
         left = round(pad_w + (clipped_shape[1] / 2.0 - dw / 2.0))
         w1 = np.zeros(shape, dtype='float32')
         w1[tdh:tdh + dh, left: left + dw] = 1.0
-        #w1 = w1 / np.sum(w1)
+        # w1 = w1 / np.sum(w1)
         w1 = tf.constant(w1)
 
         # 2行目の3番目と4番目の間
         left = round(pad_w + (clipped_shape[1] - dw * 4) * 7 / 10 + dw * 5 / 2.0)
         w2 = np.zeros(shape, dtype='float32')
         w2[tdh:tdh + dh, left: left + dw] = 1.0
-        #w2 = w2 / np.sum(w2)
+        # w2 = w2 / np.sum(w2)
         w2 = tf.constant(w2)
 
         # 2行目
@@ -370,25 +372,25 @@ class MNISTDetector(tf.keras.layers.Layer):
         left = round(pad_w + (clipped_shape[1] - dw * 4) / 5)
         w3 = np.zeros(shape, dtype='float32')
         w3[tdh:tdh + dh, left: left + dw] = 1.0
-        #w3 = w3 / np.sum(w3)
+        # w3 = w3 / np.sum(w3)
         w3 = tf.constant(w3)
 
         left = round(pad_w + (clipped_shape[1] - dw * 4) / 5 * 2 + dw)
         w4 = np.zeros(shape, dtype='float32')
         w4[tdh:tdh + dh, left: left + dw] = 1.0
-        #w4 = w4 / np.sum(w4)
+        # w4 = w4 / np.sum(w4)
         w4 = tf.constant(w4)
 
         left = round(pad_w + (clipped_shape[1] - dw * 4) / 5 * 3 + dw * 2)
         w5 = np.zeros(shape, dtype='float32')
         w5[tdh:tdh + dh, left: left + dw] = 1.0
-        #w5 = w5 / np.sum(w5)
+        # w5 = w5 / np.sum(w5)
         w5 = tf.constant(w5)
 
         left = round(pad_w + (clipped_shape[1] - dw * 4) / 5 * 4 + dw * 3)
         w6 = np.zeros(shape, dtype='float32')
         w6[tdh:tdh + dh, left: left + dw] = 1.0
-        #w6 = w6 / np.sum(w6)
+        # w6 = w6 / np.sum(w6)
         w6 = tf.constant(w6)
 
         # 3行目
@@ -398,20 +400,20 @@ class MNISTDetector(tf.keras.layers.Layer):
         left = round(pad_w + (clipped_shape[1] - dw * 4) * 3 / 10 + dw / 2.0)
         w7 = np.zeros(shape, dtype='float32')
         w7[tdh:tdh + dh, left: left + dw] = 1.0
-        #w7 = w7 / np.sum(w7)
+        # w7 = w7 / np.sum(w7)
         w7 = tf.constant(w7)
 
         left = round(pad_w + (clipped_shape[1] / 2.0 - dw / 2.0))
         w8 = np.zeros(shape, dtype='float32')
         w8[tdh:tdh + dh, left: left + dw] = 1.0
-        #w8 = w8 / np.sum(w8)
+        # w8 = w8 / np.sum(w8)
         w8 = tf.constant(w8)
 
         # 2行目の3番目と4番目の間
         left = round(pad_w + (clipped_shape[1] - dw * 4) * 7 / 10 + dw * 5 / 2.0)
         w9 = np.zeros(shape, dtype='float32')
         w9[tdh:tdh + dh, left: left + dw] = 1.0
-        #w9 = w9 / np.sum(w9)
+        # w9 = w9 / np.sum(w9)
         w9 = tf.constant(w9)
 
         return tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=0)
@@ -519,6 +521,7 @@ class MNISTDetector(tf.keras.layers.Layer):
 
         return y
 
+
 class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
     def __init__(self, output_dim, r1, r2, activation=None, normalization=None, name="circle_on_circumference_detector", **kwargs):
         super(CircleOnCircumferenceDetector, self).__init__(name=name, **kwargs)
@@ -542,7 +545,7 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
         for rad in rads:
             p = r1 * np.cos(rad - np.pi / 2)
             q = r1 * np.sin(rad - np.pi / 2)
-            _filter =  np.where((xx - p) ** 2 + (yy - q) ** 2 <= r2 ** 2, 1, 0)
+            _filter = np.where((xx - p) ** 2 + (yy - q) ** 2 <= r2 ** 2, 1, 0)
             f_list.append(_filter / np.sum(_filter))
         return tf.constant(np.array(f_list), dtype=tf.float32)
 
@@ -681,6 +684,18 @@ class FaradayRotationByStokes(tf.keras.layers.Layer):
             theta = (theta - minimum) / (maximum - minimum)
 
         return theta
+
+
+class FaradayRotationByPhaseDifference(tf.keras.layers.Layer):
+    def __init__(self):
+        super(FaradayRotationByPhaseDifference, self).__init__()
+
+    def call(self, x):
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
+        phase_rcp = tf.math.log(rcp_x)
+        phase_lcp = tf.math.log(lcp_x)
+        return tf.math.imag(-phase_rcp + phase_lcp) / 2
 
 
 class Polarizer(tf.keras.layers.Layer):
