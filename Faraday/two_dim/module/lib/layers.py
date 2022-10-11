@@ -241,7 +241,7 @@ class MO(tf.keras.layers.Layer):
         self.limitation = limitation if limitation is not None else "None"
         self.theta = theta
         self.eta = eta
-        self.eta_max = abs(eta)
+        self.eta_max = np.abs(eta)
         self.alpha = tf.math.log((1. + self.eta) / (1. - self.eta)) / 2.
         self.phi_common = tf.complex(tf.constant(0.), tf.constant(1. + self.eta_max))
         self.kernel_regularizer = kernel_regularizer
