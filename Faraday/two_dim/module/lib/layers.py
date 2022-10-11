@@ -234,16 +234,22 @@ class ElectricFieldToIntensity(tf.keras.layers.Layer):
 
 
 class MO(tf.keras.layers.Layer):
-    def __init__(self, output_dim, limitation=None, theta=0.0, eta=0.0, kernel_regularizer=None, kernel_initializer=None):
-        super(MO, self).__init__()
+    def __init__(self, output_dim, limitation=None, theta=0.0, eta=0.0, kernel_regularizer=None, kernel_initializer=None, trainable=True, name=None, dtype=tf.float32, dynamic=False, **kwargs):
+        super(MO, self).__init__(
+            trainable=trainable,
+            name=name,
+            dtype=dtype,
+            dynamic=dynamic,
+            **kwargs
+        )
         self.output_dim = output_dim
 
         self.limitation = limitation if limitation is not None else "None"
-        self.theta = theta
-        self.eta = eta
-        self.eta_max = np.abs(eta)
-        self.alpha = tf.math.log((1. + self.eta) / (1. - self.eta)) / 2.
-        self.phi_common = tf.complex(0., 1. + self.eta_max)
+        self.theta = tf.cast(theta, self.dtype)
+        self.eta = tf.cast(eta, self.dtype)
+        self.eta_max = tf.cast(abs(eta), self.dtype)
+        self.alpha = tf.cast(tf.math.log((1. + self.eta) / (1. - self.eta)) / 2., self.dtype)
+        self.phi_common = tf.complex(tf.constant(0., dtype=tf.float32), tf.constant(1. + self.eta_max, dtype=tf.float32))
         self.kernel_regularizer = kernel_regularizer
         self.kernel_initializer = kernel_initializer
         assert len(self.output_dim) == 2
@@ -255,7 +261,8 @@ class MO(tf.keras.layers.Layer):
                                    shape=[int(input_dim[-2]),
                                           int(input_dim[-1])],
                                    initializer=self.kernel_initializer,
-                                   regularizer=self.kernel_regularizer)
+                                   regularizer=self.kernel_regularizer,
+                                   dtype=self.dtype)
         super(MO, self).build(input_dim)
 
     @tf.function
