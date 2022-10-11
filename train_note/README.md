@@ -18,8 +18,10 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/konnitiha3/MOD2NN/blob/master/train_note/20220831.ipynb)
 ### 20220927
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/konnitiha3/MOD2NN/blob/master/train_note/20220927.ipynb)
-### 20221005
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/konnitiha3/MOD2NN/blob/master/train_note/20221005.ipynb)
+### 20221005/inspection
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/konnitiha3/MOD2NN/blob/master/train_note/20221005/inspection.ipynb)
+### 20221005/train
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/konnitiha3/MOD2NN/blob/master/train_note/20221005/train.ipynb)
 ### 20221006
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/konnitiha3/MOD2NN/blob/master/train_note/20221006.ipynb)
 ### 20221007
