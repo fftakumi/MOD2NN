@@ -298,8 +298,8 @@ class MO(tf.keras.layers.Layer):
         config.update({
             "output_dim": self.output_dim,
             "limitation": self.limitation,
-            "theta": self.theta.numpy(),
-            "eta": self.eta.numpy()
+            "theta": float(self.theta.numpy()),
+            "eta": float(self.eta.numpy())
         })
         if self.kernel_regularizer:
             config.update({

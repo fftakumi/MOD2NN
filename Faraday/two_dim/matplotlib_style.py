@@ -34,6 +34,7 @@ def paper():
     # figure
     plt.rcParams['figure.subplot.bottom'] = 0.2
     plt.rcParams['figure.subplot.left'] = 0.2
+    plt.rcParams["savefig.transparent"] = True
 
     # ticks
     plt.rcParams['xtick.direction'] = 'in'  # in or out
@@ -44,6 +45,8 @@ def paper():
     plt.rcParams['axes.ymargin'] = 0.01
     plt.rcParams["axes.grid"] = False
     plt.rcParams["axes.linewidth"] = 2.0
+    plt.rcParams["axes.facecolor"] = "white"
+    plt.rcParams["axes.edgecolor"] = "black"
 
     # legend
     plt.rcParams["legend.fancybox"] = False  # 丸角OFF
