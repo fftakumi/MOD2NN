@@ -30,3 +30,5 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/konnitiha3/MOD2NN/blob/master/train_note/20221011/20221011.ipynb)
 ### 20221013
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/konnitiha3/MOD2NN/blob/master/train_note/20221013.ipynb)
+### 20221014
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/konnitiha3/MOD2NN/blob/master/train_note/20221014.ipynb)
