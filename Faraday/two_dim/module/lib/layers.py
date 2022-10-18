@@ -249,7 +249,7 @@ class MO(tf.keras.layers.Layer):
         self.eta = tf.cast(eta, self.dtype)
         self.eta_max = tf.cast(abs(eta), self.dtype)
         self.alpha = tf.cast(tf.math.log((1. + self.eta) / (1. - self.eta)) / 2., self.dtype)
-        self.phi_common = tf.complex(tf.constant(0., dtype=tf.float32), tf.constant(1. + self.eta_max, dtype=tf.float32))
+        self.phi_common = tf.complex(tf.constant(0., dtype=tf.float32), tf.constant(tf.math.log(1. + self.eta_max), dtype=tf.float32))
         self.kernel_regularizer = kernel_regularizer
         self.kernel_initializer = kernel_initializer
         assert len(self.output_dim) == 2
