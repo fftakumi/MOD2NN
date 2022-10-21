@@ -322,6 +322,84 @@ class MO(tf.keras.layers.Layer):
 
         return tf.stack([rcp_x_mo, lcp_x_mo], axis=1)
 
+class BinarizedMO(MO):
+    def __init__(self, output_dim, theta=0.0, eta=0.0, sign_approximation="signswish", kernel_regularizer=None, **kwargs):
+        self.sign_approximation = sign_approximation
+        if sign_approximation=="signswish":
+          assert "beta" in kwargs
+          self.beta = kwargs["beta"]
+
+        super(BinarizedMO, self).__init__(
+            output_dim=output_dim,
+            limitation=None,
+            theta=theta,
+            eta=eta,
+            kernel_regularizer=kernel_regularizer
+        )
+
+    @tf.custom_gradient
+    def no_op(self, x):
+      def grad(upstream):
+        return upstream * 1.
+
+      y = tf.clip_by_value((x+1.)/2.,0, 1)
+      z = 2.*tf.round(y)-1.
+      return z, grad
+
+    @tf.custom_gradient
+    def signswish(self, x):
+      beta = self.beta
+      def grad(upstream):
+        return upstream * beta*(2.-beta*x*tf.tanh(beta*x/2.))/(1.+tf.cosh(beta*x))
+
+      y = tf.clip_by_value((x+1.)/2.,0, 1)
+      z = 2.*tf.round(y)-1.
+      return z, grad
+
+    @tf.function
+    def binaryzation(self, x):
+        if self.sign_approximation=="signswish":
+            return self.signswish(x)
+
+        return self.no_op(x)
+
+    @tf.function
+    def get_b_kernel(self):
+        return self.binaryzation(self.mag)
+
+    def get_binarized_complex_faraday(self):
+        b_kernel = self.binaryzation(self.mag)
+        theta = self.theta * b_kernel
+        alpha = self.alpha * b_kernel
+        return tf.complex(theta, alpha)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "sign_approximation":self.sign_approximation
+        })
+        if self.sign_approximation=="signswish":
+          config.update({
+            "beta":self.beta
+          })
+        return config
+
+    def build(self, input_shape):
+        super(BinarizedMO, self).build(input_shape)
+        self.kernel_initializer = tf.random_uniform_initializer(-1., 1.)
+        self.kernel_constraint = lambda w: tf.clip_by_value(w, -1., 1.)
+
+    def call(self, x):
+        phi = self.get_binarized_complex_faraday()
+
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
+
+        rcp_x_mo = rcp_x * tf.exp(-1.j * phi) * tf.exp(1.j * self.phi_common)
+        lcp_x_mo = lcp_x * tf.exp(1.j * phi) * tf.exp(1.j * self.phi_common)
+
+        return tf.stack([rcp_x_mo, lcp_x_mo], axis=1)
+
 
 class MNISTDetector(tf.keras.layers.Layer):
     def __init__(self, output_dim, inverse=False, activation=None, normalization=None, mode="v2", width=None, height=None, pad_w=0, pad_h=0, **kwargs):
