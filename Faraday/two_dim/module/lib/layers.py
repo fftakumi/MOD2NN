@@ -720,6 +720,100 @@ class MNISTFilter(tf.keras.layers.Layer):
         return tf.multiply(x, self.filter)
 
 
+#daaa
+class PhotoMask(tf.keras.layers.Layer):
+    def __init__(self, output_dim, row=1, col=1, inverse=False, activation=None, normalization=None, mode="v2", width=None, height=None, pad_w=0, pad_h=0, **kwargs):
+        super(PhotoMask, self).__init__(**kwargs)
+        self.output_dim = output_dim
+        self.row = row
+        self.col = col
+        self.inverse = inverse
+        self.activation = activation
+        self.normalization = normalization
+        self.mode = mode
+        self.width = width
+        self.height = height
+        self.pad_w = pad_w
+        self.pad_h = pad_h
+
+    @tf.function
+    def get_photo_mask(self):
+        return self.make_photo_mask(self.input_dim, self.row, self.col, self.width, self.height, self.pad_w, self.pad_h)
+
+    @staticmethod
+    def make_photo_mask(shape, row, col, width=None, height=None, pad_w=0, pad_h=0):
+        # dw = detector width
+        # dh = detector height
+
+        clipped_shape = (shape[0] - pad_h * 2, shape[1] - pad_w * 2)
+        dw = width if width is not None else int(clipped_shape[1]/(2*col+1))
+        dh = height if height is not None else int(clipped_shape[0]/(2*row+1))
+
+        mask = np.zeros(shape, np.float64)
+        for r in range(row):
+            for c in range(col):
+                interval_w = (clipped_shape[1] - col * dw)/(col+1)
+                interval_h = (clipped_shape[0] - row * dh)/(row+1)
+                up_left_col = pad_w + int(interval_w * (c+1) + dw*c)
+                up_left_row = pad_h + int(interval_h * (r+1) + dh*r)
+                mask[up_left_row:up_left_row+dh, up_left_col:up_left_col+dw] = 1.
+
+
+        return mask
+
+    @staticmethod
+    def plot(shape, row, col, width=None, height=None, pad_w=0, pad_h=0, ax=None):
+        image = PhotoMask.make_photo_mask(shape, row, col, width, height, pad_w, pad_h)
+        if ax:
+            ax.imshow(image.numpy())
+        else:
+            fig = plt.figure()
+            _ax = fig.add_subplot()
+            _ax.imshow(image.numpy())
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "row":self.row,
+            "col":self.col,
+            "inverse": self.inverse,
+            "activation": self.activation,
+            "normalization": self.normalization,
+            "width": self.width,
+            "height": self.height,
+            "pad_w": self.pad_w,
+            "pad_h": self.pad_h
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
+    def build(self, input_shape):
+        self.input_dim = input_shape
+
+        if self.inverse:
+            _mask = -self.make_photo_mask([self.input_dim[-2], self.input_dim[-1]], self.row, self.col, self.width, self.height, self.pad_w, self.pad_h)
+            self.mask = tf.cast(tf.complex(_mask, 0. * _mask), dtype=tf.complex64)
+        else:
+            _mask = self.make_photo_mask([self.input_dim[-2], self.input_dim[-1]], self.row, self.col, self.width, self.height, self.pad_w, self.pad_h)
+            self.mask = tf.cast(tf.complex(_mask, 0. * _mask), dtype=tf.complex64)
+
+    def call(self, x, **kwargs):
+        y = x * self.mask
+
+        if self.normalization == 'minmax':
+            maximum = tf.reduce_max(y)
+            minimum = tf.reduce_min(y)
+            y = (y - minimum) / (maximum - minimum)
+
+        if self.activation == 'softmax':
+            y = tf.nn.softmax(y)
+
+        return y
+
 class FaradayRotationByStokes(tf.keras.layers.Layer):
     def __init__(self, output_dim, normalization=None, eps=1.0e-20):
         super(FaradayRotationByStokes, self).__init__()
@@ -1082,3 +1176,31 @@ class MNISTDifferentialDetector(tf.keras.layers.Layer):
             y = tf.nn.softmax(y)
 
         return y
+
+
+class RandomPolarization(tf.keras.layers.Layer):
+    def __init__(self, input_dist=None, trainable=False, name=None, dtype=tf.float32, **kwargs):
+        self.input_dist = None # input light distribution. if it is None, uniform distribution
+        super(RandomPolarization, self).__init__(
+            trainable=trainable,
+            name=name,
+            dtype=dtype,
+            **kwargs
+        )
+
+    def build(self, input_dim):
+        E0 = tf.constant(self.input_dist) if self.input_dist is not None else tf.ones((input_dim[-2], input_dim[-1]))
+        self.rcp_x = tf.complex(tf.sqrt(E0 / 2.0), 0.0 * E0)
+        self.lcp_x = tf.complex(tf.sqrt(E0 / 2.0), 0.0 * E0)
+        super(RandomPolarization, self).build(input_dim)
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
+    def call(self, x):
+        phi = tf.complex(x, 0.0*x)
+
+        rcp_x_mo = self.rcp_x * tf.exp(-1.j * phi)
+        lcp_x_mo = self.lcp_x * tf.exp(1.j* phi)
+        return tf.stack([rcp_x_mo, lcp_x_mo], axis=1)
