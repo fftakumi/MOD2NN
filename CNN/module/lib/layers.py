@@ -9,7 +9,7 @@ class Real2Complex(tf.keras.layers.Layer):
     def get_config(self):
         config = super().get_config()
         config.update({
-            "phase": self.phase.numpy()
+            "phase": float(self.phase.numpy())
         })
         return config
 
@@ -28,16 +28,28 @@ class ComplexDense(tf.keras.layers.Layer):
         self.use_bias = use_bias
 
     def build(self, input_shape):
-        self.w_real = self.add_weight(shape=(input_shape[-1], self.units),
+        self.w_real = self.add_weight(name="w_real",
+                                      shape=(input_shape[-1], self.units),
                                       initializer='random_normal',
                                       trainable=True)
-        self.w_imag = self.add_weight(shape=(input_shape[-1], self.units),
+        self.w_imag = self.add_weight(name="w_imag",
+                                      shape=(input_shape[-1], self.units),
                                       initializer='random_normal',
                                       trainable=True)
 
         if self.use_bias:
-            self.b_real = self.add_weight(shape=(self.units,), initializer='random_normal', trainable=True)
-            self.b_imag = self.add_weight(shape=(self.units,), initializer='random_normal', trainable=True)
+            self.b_real = self.add_weight(
+                name="b_real",
+                shape=(self.units,),
+                initializer='random_normal',
+                trainable=True
+            )
+            self.b_imag = self.add_weight(
+                name="b_imag",
+                shape=(self.units,),
+                initializer='random_normal',
+                trainable=True
+            )
 
     def get_config(self):
         config = super().get_config()
