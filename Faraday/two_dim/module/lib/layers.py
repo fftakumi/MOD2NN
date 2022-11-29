@@ -116,8 +116,9 @@ class AngularSpectrum(tf.keras.layers.Layer):
 
         if self.normalization == 'max':
             # max intensity = 1
-            maximum = tf.reduce_max(tf.abs(rl), axis=[-3, -2, -1], keepdims=True)
-            return rl / tf.complex(maximum * tf.sqrt(2.), 0.0 * maximum)
+            _maximum = tf.reduce_max(tf.sqrt(tf.abs(u_rcp_x) ** 2 + tf.abs(u_lcp_x) ** 2), axis=[-2, -1], keepdims=True)
+            maximum = tf.expand_dims(_maximum, axis=1)
+            return rl / tf.complex(maximum, 0.0 * maximum)
 
         return rl
 
