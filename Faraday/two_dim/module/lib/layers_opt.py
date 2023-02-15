@@ -1,12 +1,19 @@
+"""
+MO-D2NN関連のレイヤー
+"""
+
 import tensorflow as tf
 import numpy as np
 import math
 import matplotlib.pyplot as plt
 
-import losses
-
 
 class AngularSpectrum(tf.keras.layers.Layer):
+    """各スペクトル法に基づく光の伝搬のためのクラス
+
+    Attributes:
+        output_dim (tuple): 入力電場のサンプル数
+    """
     def __init__(self, output_dim, wavelength=633e-9, z=0.0, d=1.0e-6, n=1.0, normalization=None, method=None):
         super(AngularSpectrum, self).__init__()
         self.output_dim = output_dim
@@ -117,8 +124,10 @@ class AngularSpectrum(tf.keras.layers.Layer):
         rl = tf.stack([u_rcp_x, u_lcp_x], axis=1)
 
         if self.normalization == 'max':
-            maximum = tf.reduce_max(tf.abs(rl))
-            rl = rl / tf.complex(maximum, 0.0 * maximum)
+            # max intensity = 1
+            _maximum = tf.reduce_max(tf.sqrt(tf.abs(u_rcp_x) ** 2 + tf.abs(u_lcp_x) ** 2), axis=[-2, -1], keepdims=True)
+            maximum = tf.expand_dims(_maximum, axis=1)
+            return rl / tf.complex(maximum, 0.0 * maximum)
 
         return rl
 
@@ -177,8 +186,8 @@ class ImageBinarization(tf.keras.layers.Layer):
 class IntensityToElectricField(tf.keras.layers.Layer):
     def __init__(self, output_dim, ini_theta=0.0):
         super(IntensityToElectricField, self).__init__()
-        self.output_dim = output_dim
-        self.ini_theta = ini_theta
+        self.output_dim = output_dim # 画像のピクセル数
+        self.ini_theta = ini_theta   # 画像のピクセル数
 
     def get_config(self):
         config = super().get_config()
@@ -218,9 +227,9 @@ class ElectricFieldToIntensity(tf.keras.layers.Layer):
         return cls(**config)
 
     def call(self, x):
-        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
         rcp_y = 1.0j * rcp_x
-        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
         lcp_y = -1.0j * lcp_x
 
         tot_x = rcp_x + lcp_x
@@ -229,21 +238,30 @@ class ElectricFieldToIntensity(tf.keras.layers.Layer):
         intensity = tf.abs(tot_x) ** 2 / 2.0 + tf.abs(tot_y) ** 2 / 2.0
 
         if self.normalization == 'max':
-            intensity = intensity / tf.reduce_max(intensity)
+            return intensity / tf.reduce_max(intensity)
 
         return intensity
 
 
 class MO(tf.keras.layers.Layer):
-    def __init__(self, output_dim, limitation=None, theta=0.0, eta=0.0, kernel_regularizer=None):
-        super(MO, self).__init__()
+    def __init__(self, output_dim, limitation=None, theta=0.0, eta=0.0, kernel_regularizer=None, kernel_initializer=None, trainable=True, name=None, dtype=tf.float32, dynamic=False, **kwargs):
+        super(MO, self).__init__(
+            trainable=trainable,
+            name=name,
+            dtype=dtype,
+            dynamic=dynamic,
+            **kwargs
+        )
         self.output_dim = output_dim
 
         self.limitation = limitation if limitation is not None else "None"
-        self.theta = theta
-        self.eta = eta
-        self.alpha_max = tf.complex(tf.constant(np.abs((np.log(1 + eta) - np.log(1 - eta))) / 2, dtype=tf.float32), 0.0)
+        self.theta = tf.cast(theta, self.dtype)
+        self.eta = tf.cast(eta, self.dtype)
+        self.eta_max = tf.cast(abs(eta), self.dtype)
+        self.alpha = tf.cast(tf.math.log((1. + self.eta) / (1. - self.eta)) / 2., self.dtype)
+        self.phi_common = tf.complex(tf.constant(0., dtype=tf.float32), tf.constant(tf.math.log(1. + self.eta_max), dtype=tf.float32))
         self.kernel_regularizer = kernel_regularizer
+        self.kernel_initializer = kernel_initializer
         assert len(self.output_dim) == 2
         assert -1.0 < self.eta < 1.0
 
@@ -252,48 +270,46 @@ class MO(tf.keras.layers.Layer):
         self.mag = self.add_weight("magnetization",
                                    shape=[int(input_dim[-2]),
                                           int(input_dim[-1])],
-                                   regularizer=self.kernel_regularizer)
+                                   initializer=self.kernel_initializer,
+                                   regularizer=self.kernel_regularizer,
+                                   dtype=self.dtype)
         super(MO, self).build(input_dim)
 
     @tf.function
     def get_limited_theta(self):
         if self.limitation == 'tanh':
-            return self.theta * tf.tanh(self.mag)
+            return tf.complex(self.theta * tf.tanh(self.mag), tf.zeros_like(self.mag))
         elif self.limitation == 'sin':
-            return self.theta * tf.sin(self.mag)
+            return tf.complex(self.theta * tf.sin(self.mag), tf.zeros_like(self.mag))
         elif self.limitation == 'sigmoid':
-            return self.theta * (2.0 * tf.sigmoid(self.mag) - 1.0)
+            return tf.complex(self.theta * (2.0 * tf.sigmoid(self.mag) - 1.0), tf.zeros_like(self.mag))
         else:
-            return self.theta * self.mag
+            return tf.complex(self.theta * self.mag, tf.zeros_like(self.mag))
 
     @tf.function
-    def get_limited_alpha(self):
+    def get_limited_eta(self):
         if self.limitation == 'tanh':
-            eta_lim = self.eta * tf.tanh(self.mag)
-            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim)) / 2
+            return self.eta * tf.tanh(self.mag)
         elif self.limitation == 'sin':
-            eta_lim = self.eta * tf.sin(self.mag)
-            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim)) / 2
+            return self.eta * tf.sin(self.mag)
         elif self.limitation == 'sigmoid':
-            eta_lim = self.eta * (2.0 * tf.sigmoid(self.mag) - 1.0)
-            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim)) / 2
+            return self.eta * (2.0 * tf.sigmoid(self.mag) - 1.0)
         else:
-            eta_lim = self.eta * self.mag
-            return -(tf.math.log(1.0 + eta_lim) - tf.math.log(1.0 - eta_lim)) / 2
+            return self.eta * self.mag
 
     @tf.function
     def get_limited_complex_faraday(self):
-        theta = self.get_limited_theta()
-        alpha = self.get_limited_alpha()
-        return tf.complex(theta, -alpha)
+        theta = self.theta * tf.sin(self.mag)
+        alpha = self.alpha * tf.sin(self.mag)
+        return tf.complex(theta, alpha)
 
     def get_config(self):
         config = super().get_config()
         config.update({
             "output_dim": self.output_dim,
             "limitation": self.limitation,
-            "theta": self.theta,
-            "eta": self.eta
+            "theta": float(self.theta.numpy()),
+            "eta": float(self.eta.numpy())
         })
         if self.kernel_regularizer:
             config.update({
@@ -311,19 +327,248 @@ class MO(tf.keras.layers.Layer):
         rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
         lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
 
-        rcp_x_mo = rcp_x * tf.exp(-self.alpha_max) * tf.exp(-1.0j * phi)
-        lcp_x_mo = lcp_x * tf.exp(-self.alpha_max) * tf.exp(1.0j * phi)
+        rcp_x_mo = rcp_x * tf.exp(-1.j * phi) * tf.exp(1.j * self.phi_common)
+        lcp_x_mo = lcp_x * tf.exp(1.j * phi) * tf.exp(1.j * self.phi_common)
+
+        return tf.stack([rcp_x_mo, lcp_x_mo], axis=1)
+
+class BinarizedMO(MO):
+    def __init__(self, output_dim, theta=0.0, eta=0.0, sign_approximation="signswish", kernel_regularizer=None, **kwargs):
+        self.sign_approximation = sign_approximation
+        if sign_approximation=="signswish":
+          assert "beta" in kwargs
+          self.beta = kwargs["beta"]
+
+        super(BinarizedMO, self).__init__(
+            output_dim=output_dim,
+            limitation=None,
+            theta=theta,
+            eta=eta,
+            kernel_regularizer=kernel_regularizer
+        )
+
+    @tf.custom_gradient
+    def no_op(self, x):
+      def grad(upstream):
+        return upstream * 1.
+
+      y = tf.clip_by_value((x+1.)/2.,0, 1)
+      z = 2.*tf.round(y)-1.
+      return z, grad
+
+    @tf.custom_gradient
+    def signswish(self, x):
+      beta = self.beta
+      def grad(upstream):
+        return upstream * beta*(2.-beta*x*tf.tanh(beta*x/2.))/(1.+tf.cosh(beta*x))
+
+      y = tf.clip_by_value((x+1.)/2.,0, 1)
+      z = 2.*tf.round(y)-1.
+      return z, grad
+
+    @tf.function
+    def binaryzation(self, x):
+        if self.sign_approximation=="signswish":
+            return self.signswish(x)
+
+        return self.no_op(x)
+
+    @tf.function
+    def get_b_kernel(self):
+        return self.binaryzation(self.mag)
+
+    def get_binarized_complex_faraday(self):
+        b_kernel = self.binaryzation(self.mag)
+        theta = self.theta * b_kernel
+        alpha = self.alpha * b_kernel
+        return tf.complex(theta, alpha)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "sign_approximation":self.sign_approximation
+        })
+        if self.sign_approximation=="signswish":
+          config.update({
+            "beta":self.beta
+          })
+        return config
+
+    def build(self, input_shape):
+        super(BinarizedMO, self).build(input_shape)
+        self.kernel_initializer = tf.random_uniform_initializer(-1., 1.)
+        self.kernel_constraint = lambda w: tf.clip_by_value(w, -1., 1.)
+
+    def call(self, x):
+        phi = self.get_binarized_complex_faraday()
+
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
+
+        rcp_x_mo = rcp_x * tf.exp(-1.j * phi) * tf.exp(1.j * self.phi_common)
+        lcp_x_mo = lcp_x * tf.exp(1.j * phi) * tf.exp(1.j * self.phi_common)
 
         return tf.stack([rcp_x_mo, lcp_x_mo], axis=1)
 
 
 class MNISTDetector(tf.keras.layers.Layer):
-    def __init__(self, output_dim, inverse=False, activation=None, normalization=None, **kwargs):
+    def __init__(self, output_dim, inverse=False, activation=None, normalization=None, mode="v2", width=None, height=None, pad_w=0, pad_h=0, **kwargs):
         super(MNISTDetector, self).__init__(**kwargs)
         self.output_dim = output_dim
         self.inverse = inverse
         self.activation = activation
         self.normalization = normalization
+        self.mode = mode
+        self.width = width
+        self.height = height
+        self.pad_w = pad_w
+        self.pad_h = pad_h
+
+    @tf.function
+    def get_photo_mask(self):
+        return tf.reduce_sum(self.filters, axis=0)
+
+    @staticmethod
+    def make_filters_v2(shape, width=None, height=None, pad_w=0, pad_h=0):
+        # dw = detector width
+        # dh = detector height
+
+        clipped_shape = (shape[0] - pad_h * 2, shape[1] - pad_w * 2)
+        dw = width if width is not None else min(int(tf.floor(clipped_shape[1] / 9.0)), int(tf.floor(clipped_shape[0] / 7.0)))
+        dh = height if height is not None else min(int(tf.floor(clipped_shape[1] / 9.0)), int(tf.floor(clipped_shape[0] / 7.0)))
+
+        # 1行目
+        # tdh : height of detector's top
+        tdh = round(shape[0] / 2 - dh * 5 / 2)
+
+        # 2行目の1番目と2番目の間
+        left = round(pad_w + (clipped_shape[1] - dw * 4) * 3 / 10 + dw / 2.0)
+        w0 = np.zeros(shape, dtype='float32')
+        w0[tdh:tdh + dh, left: left + dw] = 1.0
+        # w0 = w0 / np.sum(w0)
+        w0 = tf.constant(w0)
+
+        left = round(pad_w + (clipped_shape[1] / 2.0 - dw / 2.0))
+        w1 = np.zeros(shape, dtype='float32')
+        w1[tdh:tdh + dh, left: left + dw] = 1.0
+        # w1 = w1 / np.sum(w1)
+        w1 = tf.constant(w1)
+
+        # 2行目の3番目と4番目の間
+        left = round(pad_w + (clipped_shape[1] - dw * 4) * 7 / 10 + dw * 5 / 2.0)
+        w2 = np.zeros(shape, dtype='float32')
+        w2[tdh:tdh + dh, left: left + dw] = 1.0
+        # w2 = w2 / np.sum(w2)
+        w2 = tf.constant(w2)
+
+        # 2行目
+        tdh = int(tf.floor((shape[0] - dh) / 2))
+
+        left = round(pad_w + (clipped_shape[1] - dw * 4) / 5)
+        w3 = np.zeros(shape, dtype='float32')
+        w3[tdh:tdh + dh, left: left + dw] = 1.0
+        # w3 = w3 / np.sum(w3)
+        w3 = tf.constant(w3)
+
+        left = round(pad_w + (clipped_shape[1] - dw * 4) / 5 * 2 + dw)
+        w4 = np.zeros(shape, dtype='float32')
+        w4[tdh:tdh + dh, left: left + dw] = 1.0
+        # w4 = w4 / np.sum(w4)
+        w4 = tf.constant(w4)
+
+        left = round(pad_w + (clipped_shape[1] - dw * 4) / 5 * 3 + dw * 2)
+        w5 = np.zeros(shape, dtype='float32')
+        w5[tdh:tdh + dh, left: left + dw] = 1.0
+        # w5 = w5 / np.sum(w5)
+        w5 = tf.constant(w5)
+
+        left = round(pad_w + (clipped_shape[1] - dw * 4) / 5 * 4 + dw * 3)
+        w6 = np.zeros(shape, dtype='float32')
+        w6[tdh:tdh + dh, left: left + dw] = 1.0
+        # w6 = w6 / np.sum(w6)
+        w6 = tf.constant(w6)
+
+        # 3行目
+        tdh = round(shape[0] / 2 + dh * 3 / 2)
+
+        # 2行目の1番目と2番目の間
+        left = round(pad_w + (clipped_shape[1] - dw * 4) * 3 / 10 + dw / 2.0)
+        w7 = np.zeros(shape, dtype='float32')
+        w7[tdh:tdh + dh, left: left + dw] = 1.0
+        # w7 = w7 / np.sum(w7)
+        w7 = tf.constant(w7)
+
+        left = round(pad_w + (clipped_shape[1] / 2.0 - dw / 2.0))
+        w8 = np.zeros(shape, dtype='float32')
+        w8[tdh:tdh + dh, left: left + dw] = 1.0
+        # w8 = w8 / np.sum(w8)
+        w8 = tf.constant(w8)
+
+        # 2行目の3番目と4番目の間
+        left = round(pad_w + (clipped_shape[1] - dw * 4) * 7 / 10 + dw * 5 / 2.0)
+        w9 = np.zeros(shape, dtype='float32')
+        w9[tdh:tdh + dh, left: left + dw] = 1.0
+        # w9 = w9 / np.sum(w9)
+        w9 = tf.constant(w9)
+
+        return tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=0)
+
+    @staticmethod
+    def make_filters_v1(shape):
+        width = min(int(tf.floor(shape[1] / 9.0)), int(tf.floor(shape[0] / 7.0)))
+        height = min(int(tf.floor(shape[1] / 9.0)), int(tf.floor(shape[0] / 7.0)))
+
+        w0 = np.zeros(shape, dtype='float32')
+        w0[2 * height:3 * height, width:2 * width] = 1.0
+        w0 = tf.constant(w0)
+
+        w1 = np.zeros(shape, dtype='float32')
+        w1[2 * height:3 * height, 4 * width:5 * width] = 1.0
+        w1 = tf.constant(w1)
+
+        w2 = np.zeros(shape, dtype='float32')
+        w2[2 * height:3 * height, 7 * width:8 * width] = 1.0
+        w2 = tf.constant(w2)
+
+        w3 = np.zeros(shape, dtype='float32')
+        w3[4 * height:5 * height, 1 * width:2 * width] = 1.0
+        w3 = tf.constant(w3)
+
+        w4 = np.zeros(shape, dtype='float32')
+        w4[4 * height:5 * height, 3 * width:4 * width] = 1.0
+        w4 = tf.constant(w4)
+
+        w5 = np.zeros(shape, dtype='float32')
+        w5[4 * height:5 * height, 5 * width:6 * width] = 1.0
+        w5 = tf.constant(w5)
+
+        w6 = np.zeros(shape, dtype='float32')
+        w6[4 * height:5 * height, 7 * width:8 * width] = 1.0
+        w6 = tf.constant(w6)
+
+        w7 = np.zeros(shape, dtype='float32')
+        w7[6 * height:7 * height, width:2 * width] = 1.0
+        w7 = tf.constant(w7)
+
+        w8 = np.zeros(shape, dtype='float32')
+        w8[6 * height:7 * height, 4 * width:5 * width] = 1.0
+        w8 = tf.constant(w8)
+
+        w9 = np.zeros(shape, dtype='float32')
+        w9[6 * height:7 * height, 7 * width:8 * width] = 1.0
+        w9 = tf.constant(w9)
+
+        return tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=0)
+
+    @staticmethod
+    def plot(shape, width=None, height=None, pad_w=0, pad_h=0, ax=None):
+        image = tf.reduce_sum(MNISTDetector.make_filters_v2(shape, width, height, pad_w, pad_h), axis=0)
+        if ax:
+            ax.imshow(image.numpy())
+        else:
+            fig = plt.figure()
+            _ax = fig.add_subplot()
+            _ax.imshow(image.numpy())
 
     def get_config(self):
         config = super().get_config()
@@ -331,7 +576,12 @@ class MNISTDetector(tf.keras.layers.Layer):
             "output_dim": self.output_dim,
             "inverse": self.inverse,
             "activation": self.activation,
-            "normalization": self.normalization
+            "normalization": self.normalization,
+            "mode": self.mode,
+            "width": self.width,
+            "height": self.height,
+            "pad_w": self.pad_w,
+            "pad_h": self.pad_h
         })
         return config
 
@@ -341,56 +591,20 @@ class MNISTDetector(tf.keras.layers.Layer):
 
     def build(self, input_shape):
         self.input_dim = input_shape
-        width = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
-        height = min(int(tf.floor(self.input_dim[2] / 9.0)), int(tf.floor(self.input_dim[1] / 7.0)))
 
-        w0 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w0[2 * height:3 * height, width:2 * width] = 1.0
-        w0 = tf.constant(w0)
-
-        w1 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w1[2 * height:3 * height, 4 * width:5 * width] = 1.0
-        w1 = tf.constant(w1)
-
-        w2 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w2[2 * height:3 * height, 7 * width:8 * width] = 1.0
-        w2 = tf.constant(w2)
-
-        w3 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w3[4 * height:5 * height, 1 * width:2 * width] = 1.0
-        w3 = tf.constant(w3)
-
-        w4 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w4[4 * height:5 * height, 3 * width:4 * width] = 1.0
-        w4 = tf.constant(w4)
-
-        w5 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w5[4 * height:5 * height, 5 * width:6 * width] = 1.0
-        w5 = tf.constant(w5)
-
-        w6 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w6[4 * height:5 * height, 7 * width:8 * width] = 1.0
-        w6 = tf.constant(w6)
-
-        w7 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w7[6 * height:7 * height, width:2 * width] = 1.0
-        w7 = tf.constant(w7)
-
-        w8 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w8[6 * height:7 * height, 4 * width:5 * width] = 1.0
-        w8 = tf.constant(w8)
-
-        w9 = np.zeros((self.input_dim[-2], self.input_dim[-1]), dtype='float32')
-        w9[6 * height:7 * height, 7 * width:8 * width] = 1.0
-        w9 = tf.constant(w9)
-
-        if self.inverse:
-            self.filter = -tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
+        if self.mode == "v2":
+            if self.inverse:
+                self.filters = -self.make_filters_v2([self.input_dim[-2], self.input_dim[-1]], self.width, self.height, self.pad_w, self.pad_h)
+            else:
+                self.filters = self.make_filters_v2([self.input_dim[-2], self.input_dim[-1]], self.width, self.height, self.pad_w, self.pad_h)
         else:
-            self.filter = tf.stack([w0, w1, w2, w3, w4, w5, w6, w7, w8, w9], axis=-1)
+            if self.inverse:
+                self.filters = -self.make_filters_v1([self.input_dim[-2], self.input_dim[-1]])
+            else:
+                self.filters = self.make_filters_v1([self.input_dim[-2], self.input_dim[-1]])
 
     def call(self, x, **kwargs):
-        y = tf.tensordot(x, self.filter, axes=[[1, 2], [0, 1]])
+        y = tf.tensordot(x, self.filters, axes=[[1, 2], [1, 2]])
 
         if self.normalization == 'minmax':
             maximum = tf.reduce_max(y)
@@ -407,9 +621,7 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
     def __init__(self, output_dim, r1, r2, activation=None, normalization=None, name="circle_on_circumference_detector", **kwargs):
         super(CircleOnCircumferenceDetector, self).__init__(name=name, **kwargs)
         assert 0 < r1
-        assert 0 < output_dim
-        assert 0 < r2 < r1 * np.tan(2 * np.pi / (2 * output_dim))
-        assert 0 < r1 + r2 < np.max(output_dim) / 2
+        assert 0 < r2
         self.output_dim = output_dim
         self.r1 = r1
         self.r2 = r2
@@ -428,12 +640,20 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
         for rad in rads:
             p = r1 * np.cos(rad - np.pi / 2)
             q = r1 * np.sin(rad - np.pi / 2)
-            f_list.append(np.where((xx - p) ** 2 + (yy - q) ** 2 <= r2 ** 2, 1, 0))
+            _filter = np.where((xx - p) ** 2 + (yy - q) ** 2 <= r2 ** 2, 1, 0)
+            f_list.append(_filter / np.sum(_filter))
         return tf.constant(np.array(f_list), dtype=tf.float32)
 
     @staticmethod
     def plot(shape, r1, r2, class_num, ax=None):
-        losses.CategoricalCircleOnCircumferenceMSE.plot(shape, r1, r2, class_num, ax)
+        filters = CircleOnCircumferenceDetector.make_filters(shape, r1, r2, class_num)
+        sum_image = tf.reduce_sum(filters, axis=0)
+        if ax:
+            ax.imshow(sum_image.numpy())
+        else:
+            fig = plt.figure()
+            _ax = fig.add_subplot()
+            _ax.imshow(sum_image.numpy())
 
     @tf.function
     def get_photo_mask(self):
@@ -453,10 +673,10 @@ class CircleOnCircumferenceDetector(tf.keras.layers.Layer):
     def build(self, input_dim):
         self.input_dim = input_dim
 
-        self.filters = losses.CategoricalCircleOnCircumferenceMSE.make_filters(self.input_dim, self.r1, self.r2, self.output_dim)
+        self.filters = self.make_filters([self.input_dim[-2], self.input_dim[-1]], self.r1, self.r2, self.output_dim)
 
     def call(self, x):
-        y = tf.tensordot(x, self.filter, axes=[[1, 2], [1, 2]])
+        y = tf.tensordot(x, self.filters, axes=[[1, 2], [1, 2]])
 
         if self.normalization == 'minmax':
             maximum = tf.reduce_max(y)
@@ -510,6 +730,100 @@ class MNISTFilter(tf.keras.layers.Layer):
         return tf.multiply(x, self.filter)
 
 
+#daaa
+class PhotoMask(tf.keras.layers.Layer):
+    def __init__(self, output_dim, row=1, col=1, inverse=False, activation=None, normalization=None, mode="v2", width=None, height=None, pad_w=0, pad_h=0, **kwargs):
+        super(PhotoMask, self).__init__(**kwargs)
+        self.output_dim = output_dim
+        self.row = row
+        self.col = col
+        self.inverse = inverse
+        self.activation = activation
+        self.normalization = normalization
+        self.mode = mode
+        self.width = width
+        self.height = height
+        self.pad_w = pad_w
+        self.pad_h = pad_h
+
+    @tf.function
+    def get_photo_mask(self):
+        return self.make_photo_mask(self.input_dim, self.row, self.col, self.width, self.height, self.pad_w, self.pad_h)
+
+    @staticmethod
+    def make_photo_mask(shape, row, col, width=None, height=None, pad_w=0, pad_h=0):
+        # dw = detector width
+        # dh = detector height
+
+        clipped_shape = (shape[0] - pad_h * 2, shape[1] - pad_w * 2)
+        dw = width if width is not None else int(clipped_shape[1]/(2*col+1))
+        dh = height if height is not None else int(clipped_shape[0]/(2*row+1))
+
+        mask = np.zeros(shape, np.float64)
+        for r in range(row):
+            for c in range(col):
+                interval_w = (clipped_shape[1] - col * dw)/(col+1)
+                interval_h = (clipped_shape[0] - row * dh)/(row+1)
+                up_left_col = pad_w + int(interval_w * (c+1) + dw*c)
+                up_left_row = pad_h + int(interval_h * (r+1) + dh*r)
+                mask[up_left_row:up_left_row+dh, up_left_col:up_left_col+dw] = 1.
+
+
+        return mask
+
+    @staticmethod
+    def plot(shape, row, col, width=None, height=None, pad_w=0, pad_h=0, ax=None):
+        image = PhotoMask.make_photo_mask(shape, row, col, width, height, pad_w, pad_h)
+        if ax:
+            ax.imshow(image.numpy())
+        else:
+            fig = plt.figure()
+            _ax = fig.add_subplot()
+            _ax.imshow(image.numpy())
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            "output_dim": self.output_dim,
+            "row":self.row,
+            "col":self.col,
+            "inverse": self.inverse,
+            "activation": self.activation,
+            "normalization": self.normalization,
+            "width": self.width,
+            "height": self.height,
+            "pad_w": self.pad_w,
+            "pad_h": self.pad_h
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
+    def build(self, input_shape):
+        self.input_dim = input_shape
+
+        if self.inverse:
+            _mask = -self.make_photo_mask([self.input_dim[-2], self.input_dim[-1]], self.row, self.col, self.width, self.height, self.pad_w, self.pad_h)
+            self.mask = tf.cast(tf.complex(_mask, 0. * _mask), dtype=tf.complex64)
+        else:
+            _mask = self.make_photo_mask([self.input_dim[-2], self.input_dim[-1]], self.row, self.col, self.width, self.height, self.pad_w, self.pad_h)
+            self.mask = tf.cast(tf.complex(_mask, 0. * _mask), dtype=tf.complex64)
+
+    def call(self, x, **kwargs):
+        y = x * self.mask
+
+        if self.normalization == 'minmax':
+            maximum = tf.reduce_max(y)
+            minimum = tf.reduce_min(y)
+            y = (y - minimum) / (maximum - minimum)
+
+        if self.activation == 'softmax':
+            y = tf.nn.softmax(y)
+
+        return y
+
 class FaradayRotationByStokes(tf.keras.layers.Layer):
     def __init__(self, output_dim, normalization=None, eps=1.0e-20):
         super(FaradayRotationByStokes, self).__init__()
@@ -561,6 +875,18 @@ class FaradayRotationByStokes(tf.keras.layers.Layer):
         return theta
 
 
+class FaradayRotationByPhaseDifference(tf.keras.layers.Layer):
+    def __init__(self):
+        super(FaradayRotationByPhaseDifference, self).__init__()
+
+    def call(self, x):
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
+        phase_rcp = tf.math.log(rcp_x)
+        phase_lcp = tf.math.log(lcp_x)
+        return tf.math.imag(-phase_rcp + phase_lcp) / 2
+
+
 class Polarizer(tf.keras.layers.Layer):
     def __init__(self, output_dim, phi=0.0, trainable=False):
         super(Polarizer, self).__init__()
@@ -572,7 +898,7 @@ class Polarizer(tf.keras.layers.Layer):
         config = super().get_config()
         config.update({
             "output_dim": self.output_dim,
-            "phi": self.phi.numpy(),
+            "phi": float(self.phi.numpy()),
             "trainable": self.trainable
         })
         return config
@@ -582,28 +908,24 @@ class Polarizer(tf.keras.layers.Layer):
         return cls(**config)
 
     def call(self, x):
-        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, 0, :, :])(x)
+        rcp_x = tf.keras.layers.Lambda(lambda x: x[:, 0, :, :])(x)
         rcp_y = 1.0j * rcp_x
-        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, 0, :, :])(x)
+        lcp_x = tf.keras.layers.Lambda(lambda x: x[:, 1, :, :])(x)
         lcp_y = -1.0j * lcp_x
 
-        p00 = tf.complex(tf.cos(self.phi) ** 2.0, 0.0)
-        p01 = tf.complex(tf.sin(2.0 * self.phi) / 2.0, 0.0)
-        p10 = p01
-        p11 = tf.complex(tf.sin(self.phi) ** 2.0, 0.0)
+        # Ercp = T@Ercp
 
-        rcp_x_pol = p00 * rcp_x + p01 * rcp_y
-        rcp_y_pol = p10 * rcp_x + p11 * rcp_y
+        # Tr00 = Tr[0,0]
+        tr00 = tf.complex(tf.cos(self.phi) ** 2, -tf.sin(2 * self.phi) / 2) / 2.0
+        tr01 = tf.complex(tf.sin(2 * self.phi) / 2, -tf.sin(self.phi) ** 2) / 2.0
 
-        lcp_x_pol = p00 * lcp_x + p01 * lcp_y
-        lcp_y_pol = p10 * lcp_x + p11 * lcp_y
+        tl00 = tf.complex(tf.cos(self.phi) ** 2, tf.sin(2 * self.phi) / 2) / 2.0
+        tl01 = tf.complex(tf.sin(2 * self.phi) / 2, tf.sin(self.phi) ** 2) / 2.0
 
-        rcp = tf.stack([rcp_x_pol, rcp_y_pol], axis=1)
-        lcp = tf.stack([lcp_x_pol, lcp_y_pol], axis=1)
+        rcp_x_pol = tr00 * (rcp_x + lcp_x) + tr01 * (rcp_y + lcp_y)
+        lcp_x_pol = tl00 * (rcp_x + lcp_x) + tl01 * (rcp_y + lcp_y)
 
-        rl = tf.stack([rcp, lcp], axis=1)
-
-        return rl
+        return tf.stack([rcp_x_pol, lcp_x_pol], axis=1)
 
 
 class Dielectric(tf.keras.layers.Layer):
@@ -686,12 +1008,12 @@ class PhaseToPeriodic(tf.keras.layers.Layer):
 class Softmax(tf.keras.layers.Layer):
     def __init__(self, eps=0.0):
         super(Softmax, self).__init__()
-        self.eps = tf.Variable(eps, trainable=False, name="epsilon")
+        self.eps = tf.constant(eps, name="epsilon")
 
     def get_config(self):
         config = super().get_config()
         config.update({
-            "eps": self.eps.numpy()
+            "eps": float(self.eps.numpy())
         })
         return config
 
@@ -864,3 +1186,31 @@ class MNISTDifferentialDetector(tf.keras.layers.Layer):
             y = tf.nn.softmax(y)
 
         return y
+
+
+class RandomPolarization(tf.keras.layers.Layer):
+    def __init__(self, input_dist=None, trainable=False, name=None, dtype=tf.float32, **kwargs):
+        self.input_dist = None # input light distribution. if it is None, uniform distribution
+        super(RandomPolarization, self).__init__(
+            trainable=trainable,
+            name=name,
+            dtype=dtype,
+            **kwargs
+        )
+
+    def build(self, input_dim):
+        E0 = tf.constant(self.input_dist) if self.input_dist is not None else tf.ones((input_dim[-2], input_dim[-1]))
+        self.rcp_x = tf.complex(tf.sqrt(E0 / 2.0), 0.0 * E0)
+        self.lcp_x = tf.complex(tf.sqrt(E0 / 2.0), 0.0 * E0)
+        super(RandomPolarization, self).build(input_dim)
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
+    def call(self, x):
+        phi = tf.complex(x, 0.0*x)
+
+        rcp_x_mo = self.rcp_x * tf.exp(-1.j * phi)
+        lcp_x_mo = self.lcp_x * tf.exp(1.j* phi)
+        return tf.stack([rcp_x_mo, lcp_x_mo], axis=1)

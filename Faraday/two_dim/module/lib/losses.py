@@ -4,7 +4,12 @@ import matplotlib.pyplot as plt
 
 
 class CategoricalCircleOnCircumferenceMSE(tf.keras.losses.Loss):
+    """
+
+    """
     def __init__(self, shape, r1, r2, class_num, name="categorical_round_mse", **kwargs):
+
+
         super(CategoricalCircleOnCircumferenceMSE, self).__init__(name=name, **kwargs)
         assert len(shape) == 2
         assert 0 < r1
@@ -20,6 +25,8 @@ class CategoricalCircleOnCircumferenceMSE(tf.keras.losses.Loss):
 
     @staticmethod
     def make_filters(shape, r1, r2, class_num):
+
+
         rads = np.linspace(0, 2 * np.pi, class_num, endpoint=False)
         x = np.arange(shape[1])
         y = np.arange(shape[0])

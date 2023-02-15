@@ -31,6 +31,8 @@ def paper():
     plt.rcParams['font.family'] = 'Times New Roman'
     plt.rcParams['font.size'] = 18  # 適当に必要なサイズに
 
+    plt.rcParams["mathtext.fontset"] = "cm"
+
     # figure
     plt.rcParams['figure.subplot.bottom'] = 0.2
     plt.rcParams['figure.subplot.left'] = 0.2
